@@ -1,0 +1,10 @@
+TARGETKIND     		= MFCC_E_D_A    #   Basic parameterisation
+
+HLANGMODFILTER = '/usr/local/bin/gunzip -c $.gz'
+# HNETFILTER     = '/usr/local/bin/gunzip -c $.gz | /home/solveb/hub5/tools/jrlx2lat.pl'
+HNETFILTER     = '/usr/local/bin/gunzip -c $.gz'
+HNETOFILTER    = '/usr/local/bin/gzip -c > $.gz'                                                                                                            
+RAWMITFORMAT   = T
+
+STARTWORD      		= !SENT_START
+ENDWORD        		= !SENT_END

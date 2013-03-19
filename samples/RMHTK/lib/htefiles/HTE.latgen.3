@@ -1,0 +1,62 @@
+#!/bin/tcsh
+#---------------------------------------------------------------#
+# HTK RM Environment File                02/08/05               #
+#                                                               #
+# This version is for:                                          #
+#                                                               #
+#         state-clustered xwrd triphones                        #
+#         39th Order MFCC_E_D_A Data (data in MFCC_E format)    #
+#         1 Mixture/Diagonal/3 State no Skip + sp model         #
+#                                                               #
+#---------------------------------------------------------------#
+
+# Define the rmwork and rmdata areas
+set rmwork=$RMWORK
+set rmdata=$RMDATA
+set rmlib=$RMLIB
+
+# Define input configuration files
+set HLMCONFIG = ${rmlib}/configs/config.hlm
+set HDCONFIG  = ${rmlib}/configs/config.hd  
+set HDMODCONFIG = ${rmlib}/configs/config.hd.mod
+set HLRCONFIG = ${rmlib}/configs/config.hlr
+                                                                                
+# Define HMMs - should reflect current models set
+set HMMLIST=$rmlib/mlists/treeg.list # ****** #
+
+# Define Training Data and Label files for current models
+set TRAINDATALIST = ${rmlib}/flists/ind_trn109.scp
+set TRAINMLF      = ${rmlib}/wlabs/ind_trn109.mlf 
+
+# Define vovabulary 
+set HDVOCAB = ${rmlib}/dicts/mono.hd.dct
+
+# Define HLM options
+set HLMORDER         = 2
+set HLMNNEWWORD      = 1000000
+set HLMBUFSIZE       = 4000000
+set HLMUGFLR         = 1
+set HLMNGRAMCUTOFF   = ( 2 5 )
+set HLMDISCOUNT      = 7
+set HLMTRACE         = 3
+
+# # Define HDecode options (larger beam settings, slower but deeper lattices)
+# set HDGENBEAM = ( 220.0 220.0 )
+# set HDGSCALE  = 7.0
+# set HDIMPROB  = 0.0
+# set HDTOKENS  = 32
+# set HDTRACE   = 1
+
+# Define HDecode options (tigher beam settings, faster but smaller lattices)
+set HDGENBEAM = ( 210.0 210.0 )
+set HDGSCALE  = 7.0
+set HDIMPROB  = 0.0
+set HDTOKENS  = 12
+set HDTRACE   = 1
+
+# Define HLRescore options
+set HLRGSCALE  = 7.0
+set HLRIMPROB  = 0.0
+set HLRTRACE   = 3
+set HLRMRGDIR  = f
+set HLRGENBEAM = ( 300.0 10000.0 )

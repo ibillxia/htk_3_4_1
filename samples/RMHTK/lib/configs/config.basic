@@ -1,0 +1,6 @@
+ TARGETKIND     = MFCC_E_D_A    #   Basic parameterisation
+#TARGETKIND     = MFCC_E_D_A_V  #   VQ parameterisation
+#VQTABLE        = vq.table      #   VQ table
+ HNET:TRACE     = 1             #   Want this for recognition
+#FORCECXTEXP    = T             #   Needed for cross word systems
+HMODEL: SAVEBINARY = T 

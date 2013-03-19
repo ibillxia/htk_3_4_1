@@ -1,0 +1,61 @@
+    R1 - RM Speaker Independent Baseline Monophone Set
+    --------------------------------------------------
+
+This directory contains the RM Baseline monophones.  Each HMM except
+sp is 3 state left-right single mixture.  The set in hmm0/MODELS were 
+derived from the set of timit monophones (CMU 48 phone set) according 
+to the following mapping (states labelled 1->3).
+
+	RM	TIMIT
+	--      -----
+	
+	iy	iy
+	ih	ih
+	eh	eh
+	ae	ae
+	ax	ax
+	ah	ah
+	uw	uw
+	uh	uh
+	ao	ao
+	aa	aa
+	ey	ey
+	ay	ay
+	oy	oy
+	aw	aw
+	ow	ow
+	er	er
+	l	l
+        el      el
+	r	r
+	y	y
+	w	w
+	en	en
+	m	m
+	n	n
+	ng	ng
+	ch	ch
+	jh	jh
+	dh	dh
+	b	vcl b		# vcl(2) + vcl(3) + b(2)
+	d	vcl d		# vcl(2) + vcl(3) + d(2)
+	g	vcl g		# vcl(2) + vcl(3) + g(2)
+	p	cl p		# cl(2) + cl(3) + p(2)
+	t	cl t		# cl(2) + cl(3) + t(2)
+	k	cl k		# cl(2) + cl(3) + k(2)
+	z	z
+	v	v
+	f	f
+	th	th
+	s	s
+	sh	sh
+	hh	hh
+	dd	vcl d		# d + skip over d(3)
+	pd	cl p		# p + skip over p(3)
+	td	cl t		# t + skip over t(3)
+	kd	cl k		# k + skip over k(3)
+	dx	dx
+	ts	cl t s		# cl(2) + t(2) + s(2)
+	sil	sil
+	sp	sil		# sil(2) (1 State tee-Model)
+

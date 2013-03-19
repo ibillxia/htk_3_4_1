@@ -1,0 +1,174 @@
+#!/bin/csh -f
+
+#---------------------------------------------------------------#
+# HTK Unix Shell Script: herest                                 #
+#                                                               #
+# Usage:  herest env srcdir tgtdir                              #
+#                                                               #
+# This shell script provides a high level interface to HERest,  #
+# the HTK embedded training tool.The various parameters used to #
+# control HERest and the definition of the various data sources #
+# are defined in an environment file passed to herest as an arg.#
+#                                                               #
+# Env Vars Used:                                                #
+#                                                               #
+#   HMMLIST     - list of models to use in training             #
+#   TRAINDATALIST - list of all training data files             #
+#   TRAINMLF    - master label file for training data (if used) #
+#   TRAINLABDIR - dir holding training label files              #
+#                                                               #
+#   HETRACE     - trace level                                   #
+#   HEPRUNE     - pruning threshold (indexed)                   #
+#   HEMINVAR    - minimum variance threshold                    #
+#   HEMINWEIGHT - minimum mixture weight                        #
+#   HEMINEG     - minimum number of examples                    #
+#   HEUPD       - update flags u,v,m,t (default all)            #
+#   HETMTHRESH  - tied mixture prune threshold                  #
+#   HEFORCEMACRO- force a macro file to be loaded               #
+#   HESTATS     - output a statistics file                      #
+#                                                               #
+#   NICE        - nice level to run at                          #
+#                                                               #
+#---------------------------------------------------------------#
+#
+# Copyright (c) Steve Young & Phil Woodland, 1992, 1993
+# Last Updated 14/5/93
+#
+
+# Check Number of Args
+if (( $#argv != 3 ) && ( $#argv != 4 )) then
+   echo "Usage: herest env srcdir tgtdir [inxformdir]"
+   exit 1
+endif
+
+# Read the environment file
+if ( ! -f $1 ) then
+   echo "herest: cannot find environment file $1"
+   exit 1
+endif
+source $1
+
+# Check Source Exists
+set SRC=$2
+if ( -d $SRC ) then
+   set srcopt = (-H $SRC/MODELS )
+else
+   echo "herest: source dir $SRC does not exist"
+   exit 1
+endif
+
+# Create/Clear Target Directory
+set TGT=$3
+if (! -d $TGT ) mkdir $TGT
+
+set tgtopt = (-M $TGT -K $TGT)
+if ($?HEOUTXFORMEXT) then
+   set tgtopt = ($tgtopt $HEOUTXFORMEXT)
+endif
+
+if ( $#argv == 4 ) then
+   set INXFDIR=$4
+   set srcopt = ( $srcopt -a -J $INXFDIR )
+   if ($?HEINXFORMEXT) then
+      set srcopt = ($srcopt $HEINXFORMEXT)
+   endif
+endif 
+
+
+# Define the file to log all output/errors to
+set LOG=$TGT/LOG
+
+# Set Script File and Options
+set OPT = ($srcopt $tgtopt -T $HETRACE)
+
+if ($?HEPAXFORMDIR) then
+   set OPT = ($OPT -E $HEPAXFORMDIR)
+   if ($?HEPAXFORMEXT) then
+      set OPT = ($OPT $HEPAXFORMEXT)
+   endif
+endif
+if ( $?HEFORCEXFORMDIR ) then
+   while ( $#HEFORCEXFORMDIR > 0 )
+      set OPT = ($OPT -J $HEFORCEXFORMDIR[1])
+      shift HEFORCEXFORMDIR
+   end
+endif
+# Always have the source directory as a possible input directory
+set OPT = ($OPT -J $SRC)
+if ($?HEFORCEMACRO) then
+   while ( $#HEFORCEMACRO > 0 )
+      set OPT = ($OPT -H $HEFORCEMACRO[1])
+      shift HEFORCEMACRO
+   end
+endif
+
+if ($?TRAINMLF) then
+   set OPT = ( $OPT -I $TRAINMLF  )
+endif
+
+if ($?TRAINLABDIR) then
+   set OPT = ( $OPT -L $TRAINLABDIR )
+endif
+
+if ($?HEMINVAR) then
+   set OPT = ($OPT -v $HEMINVAR)
+endif
+if ($?HEMINWEIGHT) then
+   set OPT = ($OPT -w $HEMINWEIGHT)
+endif
+if ($?HEPRUNE) then
+   set OPT = ($OPT -t $HEPRUNE)
+endif
+if ($?HEMINEG) then
+   set OPT = ($OPT -m $HEMINEG)
+endif
+if ($?HEUPD)  then
+   set OPT = ($OPT -u $HEUPD)
+endif
+if ($?HETMTHRESH)  then
+   set OPT = ($OPT -c $HETMTHRESH)
+endif
+if ($?HEFORCEMACRO)  then
+   set OPT = ($OPT -H $SRC/$HEFORCEMACRO)
+endif
+if ($?HESTATS) then
+   set OPT = ($OPT -s $TGT/$HESTATS)
+endif
+if ($?HEXFORMCONFIG) then
+   set OPT = ($OPT -C $HEXFORMCONFIG )
+endif
+
+if ($?NUMLATDIR) then
+    set OPT = ( $OPT -q $NUMLATDIR )
+endif
+
+if ($?DENLATDIR) then
+    set OPT = ( $OPT -r $DENLATDIR )
+endif
+
+if ( ! $?HEBIN ) then
+    echo "HEBIN not set: using HERest as default";
+    set HEBIN = HERest
+endif
+
+# set processor nice levels 
+  set PR=(nice +$NICE)
+
+# -------------- Run HERest -----------------------------------# 
+
+echo "${HEBIN} started at `date`" > $LOG
+if ($?HESPKRMASK) then
+     $PR ${HEBIN}  -h "$HESPKRMASK" -A -D -V $OPT -C $HECONFIG -S $TRAINDATALIST $HMMLIST  >>& $LOG
+else
+    $PR ${HEBIN} -A -D -V $OPT -C $HECONFIG -S $TRAINDATALIST $HMMLIST  >>& $LOG
+endif
+if ( $status != 0 ) then
+   echo "${HEBIN} terminated abnormally at `date`" >> $LOG
+else
+   echo "${HEBIN} finished at `date`" >> $LOG
+endif
+exit 0
+
+#---------------------------------------------------------------#
+#                End of Script: herest                          #
+#---------------------------------------------------------------#

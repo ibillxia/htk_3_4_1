@@ -1,0 +1,178 @@
+#!/usr/local/bin/perl
+
+#---------------------------------------------------------------#
+# HTK Perl Script: herest.prl                                   #
+#                                                               #
+# Usage:  herest.prl env srcdir tgtdir                          #
+#                                                               #
+# This script provides a high level interface to HERest,        #
+# the HTK embedded training tool.The various parameters used to #
+# control HERest and the definition of the various data sources #
+# are defined in an environment file passed to herest as an arg.#
+#                                                               #
+# Env Vars Used:                                                #
+#                                                               #
+#   HMMLIST     - list of models to use in training             #
+#   TRAINDATALIST - list of all training data files             #
+#   TRAINMLF    - master label file for training data (if used) #
+#   TRAINLABDIR - dir holding training label files              #
+#                                                               #
+#   HETRACE     - trace level                                   #
+#   HEPRUNE     - pruning threshold (indexed)                   #
+#   HEMINVAR    - minimum variance threshold                    #
+#   HEMINWEIGHT - minimum mixture weight                        #
+#   HEMINEG     - minimum number of examples                    #
+#   HEUPD       - update flags u,v,m,t (default all)            #
+#   HETMTHRESH  - tied mixture prune threshold                  #
+#   HEFORCEMACRO- force a macro file to be loaded               #
+#   HESTATS     - output a statistics file                      #
+#                                                               #
+#   NICE        - nice level to run at                          #
+#                                                               #
+#---------------------------------------------------------------#
+#
+# Copyright (c) Phil Woodland & Steve Young, 1992, 1993
+# Last Updated 14/5/93
+#
+# Converted to Perl script by TL 7/1998
+#
+
+push @INC, "$ENV{RMSCRIPTS}";   # include the perl script path
+require "global.pl";                    # include global variables
+require "env_conv.pm";                  # sub to convert env vars
+
+# Check Number of Args
+if ( $#ARGV != 2 &&  $#ARGV != 3 ) {
+	die "Usage: herest.prl env srcdir tgtdir [inxformdir]\n";
+}
+
+# Read the environment file
+$Env_file = $ARGV[0];
+if ( ! -f $Env_file ) {
+	die "herest: cannot find environment file $Env_file\n";
+}
+
+# convert environment file to perl format
+$Perl_env = "HE_env.pl";
+&env_conv::env_convert($Env_file,$Perl_env);
+
+# read in variable value from new file in perl format
+require "$Perl_env";
+
+# Check Source Exists
+$SRC=$ARGV[1];
+if ( -d $SRC ) {
+   $srcopt = "-H $SRC/MODELS";
+}
+else {
+   die "herest: source dir $SRC does not exist\n";
+}
+
+# Create/Clear Target Directory
+$TGT=$ARGV[2];
+if (! -d $TGT ) {
+	mkdir $TGT, 0755;
+}
+
+$tgtopt = "-M $TGT -K $TGT";
+if ( defined($HEOUTXFORMEXT) ) {
+    $tgtopt = "$tgtopt $HEOUTXFORMEXT";
+}
+
+if ( $#ARGV == 3 ) {
+    $INXFDIR = $ARGV[3];
+    $srcopt = "$srcopt -a -J $INXFDIR";
+    if ( defined($HEINXFORMEXT) ) {
+        $srcopt = "$srcopt $HEINXFORMEXT";
+    }
+}
+
+
+# Define the file to log all output/errors to
+$LOG = "$TGT/LOG";
+
+# Set Script File and Options
+$OPT = "$srcopt $tgtopt -T $HETRACE";
+
+if ( defined($HVSPKRMASK_WIN) ) {
+    $OPT = "$OPT -h $HVSPKRMASK_WIN";
+}
+if ( defined($HEXFORMCONFIG) ) {
+    $OPT = "$OPT -C $HEXFORMCONFIG";
+}
+if ( defined($HEPAXFORMDIR) ) {
+    $OPT = "$OPT -E $HEPAXFORMDIR";
+    if ( defined($HEPAXFORMEXT) ) {
+        $OPT = "$OPT $HEPAXFORMEXT";
+    }
+}
+if ( defined($HEFORCEXFORMDIR) ) {
+    for ($i=0; $i<$#HEFORCEXFORMDIR; $i++) {       
+        $OPT = "$OPT -J $HEFORCEXFORMDIR[$i]";
+    }
+}
+# Always have the source directory as a possible input directory
+$OPT = "$OPT -J $SRC";
+if ( defined($HEFORCEMACRO) ) {
+    for ($i=0; $i<$#HEFORCEMACRO; $i++) {       
+        $OPT = "$OPT -H $HEFORCEMACRO[$i]";
+    }
+}
+
+if ( defined ($TRAINMLF) ) {
+	$OPT = "$OPT -I $TRAINMLF ";
+}
+
+if ( defined ($TRAINLABDIR) ) {
+	$OPT = "$OPT -L $TRAINLABDIR ";
+}
+
+if ( defined ($HEMINVAR) ) {
+	$OPT = "$OPT -v $HEMINVAR ";
+}
+if ( defined ($HEMINWEIGHT) ) {
+	$OPT = "$OPT -w $HEMINWEIGHT ";
+}
+if ( defined ($HEPRUNE) ) {
+	$OPT = "$OPT -t $HEPRUNE ";
+}
+if ( defined ($HEMINEG) ) {
+	$OPT = "$OPT -m $HEMINEG ";
+}
+if ( defined ($HEUPD) )  {
+	$OPT = "$OPT -u $HEUPD ";
+}
+if ( defined ($HETMTHRESH) ) {
+	$OPT = "$OPT -c $HETMTHRESH ";
+}
+if ( defined ($HEFORCEMACRO) ) {
+	$OPT = "$OPT -H $SRC/$HEFORCEMACRO ";
+}
+if ( defined ($HESTATS) ) {
+	$OPT = "$OPT -s $TGT/$HESTATS ";
+}
+if ( defined ($NUMLATDIR) ) {
+    $OPT = "$OPT -q $NUMLATDIR";
+}
+if ( defined ($DENLATDIR) ) {
+    $OPT = "$OPT -r $DENLATDIR";
+}
+
+# remove perl environment variable file
+unlink $Perl_env;
+
+# -------------- Run HERest -----------------------------------# 
+
+open(LOGFILE,">$LOG") or die "Can't open $LOG file\n";
+printf LOGFILE "HERest started at " . scalar localtime(time) . "\n"; 
+close (LOGFILE);
+
+system("$HEBIN -A $OPT -C $HECONFIG -S $TRAINDATALIST $HMMLIST >> $LOG") ;
+
+open(LOGFILE,">>$LOG") or die "Can't open $LOG file\n";
+printf LOGFILE "HERest finished at " . scalar localtime(time) . "\n"; 
+close (LOGFILE);
+
+#---------------------------------------------------------------#
+#                End of Script: herest                          #
+#---------------------------------------------------------------#

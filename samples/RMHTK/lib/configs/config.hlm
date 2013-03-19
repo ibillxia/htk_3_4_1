@@ -1,0 +1,17 @@
+                 RAWMITFORMAT  =              TRUE
+                 OUTCMAPRAW    =              TRUE
+                 INCMAPRAW     =              TRUE
+                 OUTWMAPRAW    =              TRUE
+                 INWMAPRAW     =              TRUE
+LPCALC:          TRACE         =                 3
+LCMAP:           UNKNOWNNAME   =             !!UNK
+LCMAP:           UNKNOWNID     =                 1
+                 LGRAMOFILTER  =  '/usr/local/bin/gzip -c > $.gz'
+                 LGRAMFILTER   =  '/usr/local/bin/gunzip -c $'
+                 HLANGMODOFILTER = '/usr/local/bin/gzip -c > $.gz'
+                 HLANGMODFILTER  = '/usr/local/bin/gunzip -c $.gz'
+                 LMTEXTFILTER  = '/usr/local/bin/gunzip -c $'
+                 LCMAPOFILTER  = '/usr/local/bin/gzip -c > $.gz'
+                 LCMAPFILTER   = '/usr/local/bin/gunzip -c $.gz'
+                 LWMAPFILTER   = '/usr/local/bin/gunzip -c $.gz'
+                 LWMAPOFILTER  = '/usr/local/bin/gzip -c > $.gz'

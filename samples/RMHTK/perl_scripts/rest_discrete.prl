@@ -1,0 +1,56 @@
+#!/usr/local/bin/perl
+
+# This script will initialise the discrete hmm models.
+#
+# usage: init_discrete.prl hmmlist config source_dir target_dir mlf script_file 
+#
+# where:        hmmlist         - hmm list
+#                       config          - configuration file
+#                       source_dir      - source hmm directory
+#                       target_dir      - target hmm directory
+#                       mlf                     - master label file
+#                       script_file     - script file name
+#
+# TL 7/1998
+#
+
+if ( $#ARGV != 5 ) {
+	die "usage: init_discrete.prl hmmlist config source_dir target_dir mlf script_file\n";
+}
+
+$hmmlist = $ARGV[0];
+if ( ! -f $hmmlist ) {
+   die "hmmlist file $hmmlist not found.\n";
+}
+
+$config_file = $ARGV[1];
+if ( ! -f $config_file ) {
+   die "config file $config_file not found.\n";
+}
+
+$src_dir = $ARGV[2];
+if ( ! -d $src_dir ) {
+   die "source hmm dir $src_dir not found.\n";
+}
+
+$tgt_dir = $ARGV[3];
+if ( ! -d $tgt_dir ) {
+	mkdir $tgt_dir, 0755;
+}
+
+$mlf = $ARGV[4];
+if ( ! -f $mlf ) {
+   die "master label file $mlf not found.\n";
+}
+
+$script = $ARGV[5];
+if ( ! -f $script ) {
+   die "script file $script not found.\n";
+}
+
+open(HMMLIST,"<$hmmlist") or die "Can't open file $hmmlist\n";
+while (<HMMLIST>) {
+	chop;
+	system("HRest -T 1 -C $config_file -M $tgt_dir -l $_ -I $mlf -S $script $src_dir\\$_");
+}
+close(HMMLIST);

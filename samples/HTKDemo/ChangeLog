@@ -1,0 +1,7 @@
+2000-10-13  Gunnar Evermann  <ge204@eng.cam.ac.uk>
+
+	* toolconfs/*.conf: Remove BYTEORDER=NOVAX lines.
+
+	* runDemo.pl: 
+	* runDemo: Set $edFile=$monEdFile by default.
+	From "Aldebaro Klautau" <aklautau@ucsd.edu>

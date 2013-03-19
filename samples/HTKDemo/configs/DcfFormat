@@ -1,0 +1,45 @@
+<BEGINtest_config_file>:
+
+<COMMENT>:
+   This is an example showing the format of the DCF
+
+<BEGINsys_setup>:
+
+hsKind:             /* P)LAIN, T)IED, S)HARED */
+covKind:            /* F)ULLC, D)IAGC */
+nStreams:           /* 1), 3) */
+nMixes:             /* for PLAINHS or SHAREDHS 1), 4), 1 1 1), 4 4 4) 
+                       for TIEDHS      12), 12 12 4) - monophone
+                                       32), 32 32 4) - triphone or biphone
+                       for DISCRETEHS  64), 64 64 16)*/
+Context:            /* M)onophone, T)riphone, L)eft biphone, R)ight biphone */
+TiedState:          /* y)es, n)o - if y a tied state system is produced*/
+VQ_clust:           /* L)inear, T)ree clustering of codebook production */
+HERest Iter:        /* 1), N) - number of iters of embedded training,
+                       N has no upper limit*/
+HERest par mode:    /* y)es, n)o - if y HERest is called in parallel mode*/
+Direct_audio:       /* y)es, n)o - if y HVite is called in direct
+                       audio mode and the user can view the output of
+                       a simple live recogniser */
+Clean_up:           /* y)es, n)o - if y directories containing hmms,
+                       results files and accumulator files will be cleared*/
+Trace_tool_calls:   /* y)es, n)o - if y then script will print out
+                       actual call made to HTK tools*/
+
+<ENDsys_setup>:
+
+<BEGINtool_steps>:           
+                       
+HCopy:              /* y)es, n)o - Note that HERest & HSmooth
+HList:                                are mutually exclusive */
+HQuant:
+HLEd:
+HInit:
+HRest:
+HERest:
+HSmooth:
+HVite:
+
+<ENDtool_steps>:
+
+<ENDtest_config_file>:

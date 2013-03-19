@@ -1,0 +1,18 @@
+2004-03-21  Gunnar Evermann  <ge204@eng.cam.ac.uk>
+
+	* Fix many bugs in RM recipe.
+	From  Anna Langley <jal58@eng.cam.ac.uk>
+
+        * Extend recipe for new adaptation code.
+	From  Mark Gales  <mjfg@eng.cam.ac.uk>
+
+2001-08-28  Gunnar Evermann  <ge204@eng.cam.ac.uk>
+
+	* lib/dicts/sil.txt: Sort entries.
+
+2000-10-24  Gunnar Evermann  <ge204@eng.cam.ac.uk>
+
+	* scripts/herest: 
+	* scripts/hedit: 
+	* scripts/fixrm: H2Tool -> HTool.
+

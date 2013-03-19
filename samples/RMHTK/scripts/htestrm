@@ -1,0 +1,325 @@
+#!/bin/csh -f
+
+#---------------------------------------------------------------#
+# HTK Unix Shell Script: htestrm                                #
+#                                                               #
+# Usage:  htestrm env type set hmmdir                           #
+#                                                               #
+# htestrm uses the HTK environment settings to recognise the    #
+# specified set of test files and then compares them with the   #
+# reference labels using HResults.                              #
+# type  is used to select a type of test of conditions from the #
+# env file. set selects the test data independently of type.    #
+# The test results are stored in a directory called             #
+# test_type_set.k inside the source hmm directory hmmdir        #
+# where k is the  repetition idx.                               #
+# A copy of the env file containing the test parameters is left #
+#in the test directory (typically changed for different indexes)#         
+# The shell variable TESTSET is set equal to set & is used to   #
+# specify the test data in the HTE file.                        #
+# Others variables in the HTE file are indexed to reflect       #
+# values with different type the different type in an order     #
+# given by the HTE variable TYPELIST                            #
+#                                                               #
+#   TYPELIST - name of possible type values                     #
+#   SETLIST - list of possible TESTSET & set values             #
+#   TESTDATALIST- list of test files (TESTSET)                  #
+#   TESTMLF     - MLF for reference labs (if used)  (TESTSET)   #
+#   TESTLABDIR  - dir holding reference lab files               #
+#   HMMLIST  - list of models to use in testing                 #
+#   HVTRACE     - trace level                                   #
+#   HVPRUNE - pruning threshold (indexed)                       #
+#   HVWEPRUNE - word-end pruning threshold (indexed)            #
+#   HVMAXACTIVE - max number of phone insts active (indexed)    #
+#   HVGSCALE    - grammar scale factor (indexed)                #
+#   HVIMPROB - inter-model log probability addition(indexed)    #
+#   HVNET   - network definition file (indexed)                 #
+#   WORDLIST- list of vocabulary items                          #
+#   HRNIST  - run HResults in NIST mode                         #
+#   NISTSCORE - run the NIST scoring software                   #
+#   NICE    - nice level to run at                              #
+#---------------------------------------------------------------#
+#
+# Copyright (c) Phil Woodland & Steve Young, 1992, 1993
+# Last Updated 19/10/93
+#
+
+# Check Number of Args 
+if (( $#argv != 4) && ( $#argv != 5)) then
+   echo "Usage: htestrm env tsttype tstset hmmdir [inxformdir]"
+   exit 1
+endif
+
+# Read the environment file
+if ( ! -f $1 ) then
+   echo "Cannot find environment file $1"
+   exit 1
+endif
+
+set TYPE=$2
+
+set SET=$3
+set TESTSET=$SET
+
+# Load in the environment file
+source $1
+
+# Check the type
+if (! $?TYPELIST) then
+   echo "htestrm: TYPELIST  not set"
+   exit
+endif
+unset INDEX
+set count=0
+foreach i ($TYPELIST)
+   @ count++
+   if ($i == $TYPE) then
+      set INDEX=$count
+   endif
+end
+if (! $?INDEX) then
+   echo "htestrm: $TYPE not in TYPELIST"   
+   exit
+endif
+
+# Check the test set
+unset setfound
+if (! $?SETLIST) then
+   echo "htestrm: SETLIST  not set"
+   exit
+endif
+foreach i ($SETLIST)
+   if ($i == $SET) then
+      set setfound
+   endif
+end
+
+if ( (! $?setfound) && ( $SET != dms0_tst ) ) then
+	echo "htestrm: $SET not in SETLIST\n";
+        exit
+endif
+
+# Check hmmsource Exists
+set HMMSOURCE=$4
+if ( ! -d $HMMSOURCE ) then
+   echo "htestrm: error - hmm directory $HMMSOURCE does not exist"
+   exit 1
+endif
+
+# Set test dir
+unset TESTDIRSET
+set TESTEXTN=1
+while (! $?TESTDIRSET)
+   if ($?HVALIGN) then
+      set TESTDIR=$HMMSOURCE/align_"$TYPE"_"$SET"."$TESTEXTN"
+   else 
+      set TESTDIR=$HMMSOURCE/test_"$TYPE"_"$SET"."$TESTEXTN"
+   endif
+   if ( ! -d $TESTDIR ) then
+      mkdir $TESTDIR
+      set TESTDIRSET
+   else
+      @ TESTEXTN++
+   endif
+end
+
+# Define the file to log all output/errors to
+set LOG=$TESTDIR/LOG
+
+# Copy the test HTE file as a record
+cp $1 $TESTDIR/HTE
+
+# Check the equates file and load equates
+if ($?HREQSETS) then
+   set EQFILE="$HREQSETS[$INDEX]"
+   if ( ! -f $EQFILE ) then
+      echo "Cannot find HResults equates file $EQFILE"
+      exit 1
+   endif
+   set EQSETS=`cat $EQFILE`
+endif
+
+# Set HVite Options
+set OPT = ( -H $HMMSOURCE/MODELS )
+
+if ( $#argv == 5 ) then
+   set INXFDIR=$5
+   set OPT = ( $OPT -k -J $INXFDIR )
+   if ($?HVINXFORMEXT) then
+      set OPT = ($OPT $HVINXFORMEXT)
+   endif
+endif 
+
+if ( $?HVFORCEXFORMDIR ) then
+   while ( $#HVFORCEXFORMDIR > 0 )
+      set OPT = ($OPT -J $HVFORCEXFORMDIR[1])
+      shift HVFORCEXFORMDIR
+   end
+endif
+# Always have the source directory as a possible input directory
+set OPT = ($OPT -J $HMMSOURCE)
+if ($?HVFORCEMACRO) then
+   while ( $#HVFORCEMACRO > 0 )
+      set OPT = ($OPT -H $HVFORCEMACRO[1])
+      shift HVFORCEMACRO
+   end
+endif
+
+if ($?HVINCADAPT) then
+   set OPT = ($OPT -j $HVINCADAPT -K $TESTDIR)
+   if ($?HVOUTXFORMEXT) then
+      set OPT = ($OPT $HVOUTXFORMEXT)
+   endif   
+else if ($?HVADAPT) then
+   set OPT = ($OPT -K $TESTDIR)
+   if ($?HVOUTXFORMEXT) then
+      set OPT = ($OPT $HVOUTXFORMEXT)
+   endif
+endif
+
+set HVOPFILE=$TESTDIR/"$TYPE"_"$SET".mlf
+
+set OPT = ( $OPT -i $HVOPFILE )
+set OPT = ( $OPT -X rec )
+
+if ($?HVTRACE) then
+   set OPT = ($OPT -T $HVTRACE)
+endif
+
+# add the indexed options
+
+if ($?HVPRUNE) then
+   set OPT = ($OPT -t $HVPRUNE[$INDEX])
+endif
+if ($?HVWEPRUNE) then
+   set OPT = ($OPT -v $HVWEPRUNE[$INDEX])
+endif
+if ($?HVMAXACTIVE) then
+   set OPT = ($OPT -u $HVMAXACTIVE[$INDEX])
+endif
+if ($?HVGSCALE) then
+   set OPT = ($OPT -s $HVGSCALE[$INDEX])
+endif
+if ($?HVIMPROB) then
+   set OPT = ($OPT -p $HVIMPROB[$INDEX])
+endif
+if ($?HVXFORMCONFIG) then
+   set OPT = ($OPT -C $HVXFORMCONFIG )
+endif
+if ($?HVLABFORMAT) then
+   set OPT = ($OPT -o $HVLABFORMAT )
+endif
+if ($?HVALIGN) then
+   set OPT = ($OPT -m -o TPMFW -b \!SENT_START -a -y lab)
+   if ($?ALIGNMLF) then
+        set OPT = ( $OPT -I $ALIGNMLF  )
+   else 
+       echo "Must specify an alignment MLF"
+       exit 1
+   endif
+else 
+   set OPT = ($OPT -w $HVNET[$INDEX] )
+endif
+
+set VOC=$HVVOC[$INDEX]
+
+# set processor nice levels 
+  set PR=(nice +$NICE)
+
+# -------------- Run HVite -----------------
+
+echo "HVite started at `date`" > $LOG
+if ($?HVSPKRMASK) then
+   $PR HVite -h "$HVSPKRMASK" -A -D -V -C $HVCONFIG $OPT -S $TESTDATALIST $VOC $HMMLIST >>& $LOG
+else
+   $PR HVite -A -D -V -C $HVCONFIG $OPT -S $TESTDATALIST $VOC $HMMLIST >>& $LOG
+endif
+if ( $status != 0 ) then
+   echo "HVite terminated abnormally at `date`" >> $LOG
+   echo "" >> $LOG 
+   exit $status
+else
+   echo "HVite finished at `date`" >> $LOG
+   echo "" >> $LOG
+endif
+
+# ------------------------------------------
+
+# Now for results analysis
+#
+
+# Set the equates if any
+set EQ=""
+if ($?EQSETS) then
+   unset I
+   foreach x ( $EQSETS )
+      if (! $?I) then
+         set EQ="$EQ -e "
+         set I
+      else
+         unset I
+      endif
+      set EQ="$EQ $x"
+   end
+endif
+
+set OPT=""
+
+if ($?TESTMLF) then
+   set OPT=($OPT -I $TESTMLF)
+endif
+
+if ($?TESTLABDIR) then
+   set OPT=($OPT -L $TESTLABDIR)
+endif
+
+if ($?HRNIST) then
+  set OPT = ($OPT -n)
+endif
+
+echo "Running HResults at `date`"  >> $LOG
+$PR HResults -A -z ':::' $OPT $EQ $WORDLIST $HVOPFILE >>& $LOG
+if ( $status != 0 ) then
+   echo "HResults terminated abnormally at `date`" >> $LOG
+else
+   echo "HResults finished at `date`" >> $LOG
+endif
+echo "" >> $LOG
+
+# ------------------------------------------
+
+# Now for NIST scoring if required
+#
+
+if ($?NISTSCORE) then
+   if ($TYPE != wp && $TYPE != ng) then
+      echo "Cant Run NIST Scoring with type = $TYPE" >> $LOG
+      exit 1
+   endif
+   echo "Running HLab2Hyp at `date`" >> $LOG
+   set HYP="$TYPE"_"$SET"
+   $PR HLab2Hyp $TESTDIR/"$HYP".hyp $HVOPFILE >>& $LOG
+   if ( $status != 0 ) then
+      echo "HLab2Hyp terminated abnormally at `date`" >> $LOG
+      echo "" >> $LOG 
+      exit $status
+   else
+      echo "HLab2Hyp finished at `date`" >> $LOG
+      echo "" >> $LOG
+   endif
+   cd $TESTDIR
+   if ( $TYPE == wp ) then 
+      wgscore "$HYP".hyp >> LOG
+   else
+      ngscore "$HYP".hyp >> LOG
+   endif
+   cat "$HYP".hyp.scr/"$HYP".sys >> LOG
+   echo "" >> LOG
+   cd ../..
+endif
+
+echo "htestrm finished  at `date`" >> $LOG
+
+#---------------------------------------------------------------#
+#                   End of Script: htestrm                      #
+#---------------------------------------------------------------#

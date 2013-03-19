@@ -1,0 +1,6 @@
+JO 12 2.0
+TI SPDF_1_ {*.state[2-4].stream[1].mix}
+TI SPDF_2_ {*.state[2-4].stream[2].mix}
+JO 4 2.0
+TI SPDF_3_ {*.state[2-4].stream[3].mix}
+HK TIEDHS

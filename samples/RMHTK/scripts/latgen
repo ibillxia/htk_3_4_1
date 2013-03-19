@@ -1,0 +1,223 @@
+#!/bin/tcsh -f
+# set verbose
+
+# Check Number of Args
+if ( $#argv != 3 ) then
+    echo "Usage: $0 env hmmdir tgtdir";
+    exit 1;
+endif
+ 
+# Read the environment file
+if ( ! -f $1 ) then
+   echo "$0: cannot find environment file $1";
+   exit 1;
+endif
+
+source $1;
+
+if ( ! -d $2 || ! -f $2/MODELS ) then
+   echo "$0: hmm model $2 does not exist";
+   exit 1;
+endif
+    
+# Create/Clear Target Directory
+set tgt = $3;
+
+# Check settings
+if ( ! $?rmlib ) then
+echo rmlib not set; exit 1;
+endif
+if ( ! $?HLMCONFIG ) then
+echo HLMCONFIG not set; exit 1;
+endif
+if ( ! $?HDCONFIG ) then
+echo HDCONFIG not set; exit 1;
+endif
+if ( ! $?HDMODCONFIG ) then
+echo HDMODCONFIG not set; exit 1;
+endif
+if ( ! $?HLRCONFIG ) then
+echo HLRCONFIG not set; exit 1;
+endif
+if ( ! $?TRAINDATALIST ) then
+echo TRAINDATALIST not set; exit 1;
+endif
+if ( ! $?TRAINMLF ) then
+echo TRAINMLF not set; exit 1;
+endif
+if ( ! $?HDVOCAB ) then
+echo HDVOCAB not set; exit 1;
+endif
+if ( ! $?HLMORDER ) then
+echo HLMORDER not set; exit 1;
+endif
+if ( ! $?HLMNNEWWORD ) then
+echo HLMNNEWWORD not set; exit 1;
+endif
+if ( ! $?HLMBUFSIZE ) then
+echo HLMBUFSIZE not set; exit 1;
+endif
+if ( ! $?HLMUGFLR ) then
+echo HLMUGFLR not set; exit 1;
+endif
+if ( ! $?HLMNGRAMCUTOFF ) then
+echo HLMNGRAMCUTOFF not set; exit 1;
+endif
+if ( ! $?HLMDISCOUNT ) then
+echo HLMDISCOUNT not set; exit 1;
+endif
+if ( ! $?HDGENBEAM ) then
+echo HDGENBEAM not set; exit 1;
+endif
+if ( ! $?HDGSCALE ) then
+echo HDGSCALE not set; exit 1;
+endif
+if ( ! $?HDIMPROB ) then
+echo HDIMPROB not set; exit 1;
+endif
+if ( ! $?HDTOKENS ) then
+echo HDTOKENS not set; exit 1;
+endif
+if ( ! $?HLRGSCALE ) then
+echo HLRGSCALE not set; exit 1;
+endif
+if ( ! $?HLRIMPROB ) then
+echo HLRIMPROB not set; exit 1;
+endif
+if ( ! $?HLRMRGDIR ) then
+echo HLRMRGDIR not set; exit 1;
+endif
+if ( ! $?HLRGENBEAM ) then
+echo HLRGENBEAM not set; exit 1;
+endif
+
+set data =  ( `basename ${TRAINMLF} | awk -F\. '{print $1}'` );
+
+# Building LM
+mkdir -p $tgt/lib/lms;
+cd $tgt/lib/lms;
+
+echo "";
+echo "Building Back-off Bi-gram LM from:";
+echo "";
+echo "  Text Input:    ${TRAINMLF}";
+echo "  Vocabulary:    ${HDVOCAB}";
+echo "";
+
+cat ${HDVOCAB} | awk '{print $1}' | sort -u > rm.wlist; 
+echo \!\!UNK > rm.wlist+ukn; 
+cat ${HDVOCAB} | awk '{print $1}' | sort -u >> rm.wlist+ukn; 
+gzip -f rm.wlist*;
+
+cat ${TRAINMLF} | egrep -v \# | awk '{if ($0 != "\.") printf("%s ", $0); else print $0;}' | awk '{printf("\!SENT_START "); for(i=2;i<=NF-1;i++){ printf ("%s ", $i);} printf("\!SENT_END\n"); }' > ${data}.dat; 
+gzip -f ${data}.dat;
+
+cat > empty.wmap << END
+Name    = rm
+SeqNo   = 0
+Entries = 0
+EscMode = RAW
+Fields  = ID,WFC
+\Words\
+END
+
+gzip -f empty.wmap;
+
+mkdir -p db_2-gram.${data};
+ 
+set LGPOPTS = ( -A -D -V -C ${HLMCONFIG} -T ${HLMTRACE} -a ${HLMNNEWWORD} -b ${HLMBUFSIZE} -n ${HLMORDER} );
+LGPrep ${LGPOPTS} -d db_2-gram.${data} empty.wmap ${data}.dat >& LOG;
+ 
+set LGCOPTS = ( -A -D -V -C ${HLMCONFIG} -T ${HLMTRACE} -a ${HLMNNEWWORD} -b ${HLMBUFSIZE} );
+LGCopy ${LGCOPTS} -o -m db_2-gram.${data}/wmap.new -d db_2-gram.${data} -w rm.wlist db_2-gram.${data}/wmap db_2-gram.${data}/gram.0.gz >> LOG;
+ 
+set LBOPTS = ( -A -D -V -C ${HLMCONFIG} -T ${HLMTRACE} -u ${HLMUGFLR} -k ${HLMDISCOUNT} -c ${HLMNGRAMCUTOFF} -n ${HLMORDER} );
+LBuild ${LBOPTS} db_2-gram.${data}/wmap.new bg.${data} db_2-gram.${data}/gram.0.gz >> LOG;
+
+echo "Number of N-grams trained:"
+echo `gunzip -c bg.${data}.gz | head -10 | egrep ngram`;
+echo "";
+
+bzip2 -f LOG;
+cd ../../;
+
+# Prepare scp file lists
+mkdir -p lib/flists;
+cd lib/flists;
+
+echo "Preparing scp file lists in lib/flists ...";
+
+ln -s ${TRAINDATALIST};
+cat ${data}.scp | awk -F\/ '{print $(NF-1)}' | sort -u > spkr.list;
+
+foreach i ( `cat spkr.list` )
+    egrep ${i} ${data}.scp > ${i}.scp; 
+    egrep ${i} ${data}.scp | awk -F\/ '{printf("*/%s\n", $NF);}' | sed 's:.mfc:.lab:g' > ${i}.labscp; 
+    egrep ${i} ${data}.scp | awk -F\/ '{printf("*/%s\n", $NF);}' | sed 's:.mfc:.lat:g' > ${i}.latscp; 
+end
+
+cd ../../;
+
+# Generate lattices
+
+echo "";
+echo "Starting lattice generation from:";
+echo "";
+echo "  Data Setup:    ${TRAINDATALIST}";
+echo "  Word Label:    ${TRAINMLF}";
+echo "  HMM Set:       ${2}/MODELS";  
+echo "  HMM List:      ${HMMLIST}";
+echo "  Vocabulary:    ${HDVOCAB}";
+echo "  N-gram LM:     lib/lms/bg.${data}";
+echo "";
+
+ln -s ../hmm0
+
+mkdir -p numnets dennets; 
+mkdir -p  lattices/num lattices/den;
+
+set HLROPTS = ( -A -D -V -T ${HLRTRACE} -q tvalr -C ${HLRCONFIG} -w -s ${HLRGSCALE} -p ${HLRIMPROB} )
+set HDOPTS  = ( -A -D -V -T ${HDTRACE} -t ${HDGENBEAM} -s ${HDGSCALE} -p ${HDIMPROB} -n ${HDTOKENS} -C ${HDCONFIG} )
+
+foreach i ( `cat lib/flists/spkr.list` )
+
+    echo Processing speaker ${i} with `cat lib/flists/${i}.scp | wc -l | awk '{print $1}'` utterances:;
+    echo "";
+
+    mkdir -p numnets/${i}; 
+    HLRescore ${HLROPTS} -n lib/lms/bg.${data} -I ${TRAINMLF} -f -i numnets/${i}/bg.${i}.mlf -l numnets/${i}/ -S lib/flists/${i}.labscp ${HDVOCAB} >& numnets/${i}/LOG; 
+    bzip2 -f numnets/${i}/LOG;
+
+    mkdir -p lattices/num/${i}; 
+    HDecode.mod ${HDOPTS} -C ${HDMODCONFIG} -i lattices/num/${i}/num.${i}.mlf -H ${2}/MODELS -d ${2} -q tvaldm -o M -z lat -w -L numnets/${i}/ -l lattices/num/${i}/ -X lat -S lib/flists/${i}.scp ${HDVOCAB} ${HMMLIST} >& lattices/num/${i}/LOG; 
+    bzip2 -f lattices/num/${i}/LOG; 
+
+    echo `ls lattices/num/${i} | egrep lat.gz | wc -l | awk '{print $1}'` numerator lattices generated for speaker ${i} ...;
+    echo "";
+
+    mkdir -p dennets/${i}/bg; 
+    HDecode ${HDOPTS} -i dennets/${i}/bg.${i}.mlf -H ${2}/MODELS -d ${2} -o M -z lat -w lib/lms/bg.${data} -l dennets/${i}/bg -X lat -S lib/flists/${i}.scp ${HDVOCAB} ${HMMLIST} >& dennets/${i}/LOG; 
+    bzip2 -f dennets/${i}/LOG;
+
+    HLRescore ${HLROPTS} -t ${HLRGENBEAM} -m ${HLRMRGDIR} -L dennets/${i}/bg -l dennets/${i} -S lib/flists/${i}.latscp ${HDVOCAB} >& dennets/${i}/hlr.LOG; 
+    bzip2 -f dennets/${i}/hlr.LOG;
+
+    mkdir -p lattices/den/${i}; 
+    HDecode.mod ${HDOPTS} -C ${HDMODCONFIG} -i lattices/den/${i}/den.${i}.mlf -H ${2}/MODELS -d ${2} -q tvaldm -o M -z lat -w -L dennets/${i}/ -l lattices/den/${i}/ -X lat -S lib/flists/${i}.scp ${HDVOCAB} ${HMMLIST} >& lattices/den/${i}/LOG; 
+    bzip2 -f lattices/den/${i}/LOG;
+
+    echo `ls lattices/den/${i} | egrep lat.gz | wc -l | awk '{print $1}'` denominator lattices generated for speaker ${i} ..; 
+    echo "";
+end
+
+find lattices/num/ -name '*.lat.gz' | awk -F\/ '{print $NF}' | sed 's:.lat.gz::g' | sort -u > tmp.num; 
+find lattices/den/ -name '*.lat.gz' | awk -F\/ '{print $NF}' | sed 's:.lat.gz::g' | sort -u > tmp.den; 
+join tmp.num tmp.den > tmp.all; 
+fgrep -f tmp.all ${TRAINDATALIST} | awk -F\/ '{printf("%s=%s\n", $NF, $0);}' > ${rmlib}/flists/${data}.lat.scp; 
+rm -fr tmp.num tmp.den tmp.all;
+
+echo "";
+echo Phone lattices generated for `cat ${rmlib}/flists/${data}.lat.scp | wc -l | awk '{print $1}'` out of `cat ${rmlib}/flists/${data}.scp | wc -l | awk '{print $1}'` utterances in $PWD/lattices/ ...;
+echo "";
+echo "New scp file for discriminative training saved to ${rmlib}/flists/${data}.lat.scp";
+echo "";

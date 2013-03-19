@@ -1,0 +1,61 @@
+#!/usr/local/bin/perl
+
+# This script will generate  word level networks for the no-grammar test.
+# usage: ng_net.prl ng_gram_file nn nl
+#
+# TL 7/1998
+#
+
+$[ = 1;			# set array base to 1
+
+if ( $#ARGV != 4 ) {
+    die "usage: ng_net.prl no-grammar_word_file output_net_file nn nl\n";
+}
+
+$ng_file = $ARGV[1];
+if ( ! -f $ng_file ) {
+    die "no-grammar_word_file output_net_file $ng_file not found.\n";
+}
+
+$net_file = $ARGV[2];
+$nn = $ARGV[3];
+$nl = $ARGV[4];
+
+open(NGFILE,"<$ng_file") or die "Can't open file $ng_file\n";
+open(NETFILE,">$net_file") or die "Can't open file $net_file\n";
+
+while (<NGFILE>) {
+	chop;				# strip record separator
+	/\*/ && next;		# skip comment line
+	@Fld = split(' ', $_, 9999);
+
+	if ($. == 1) {
+		printf NETFILE "N=%d L=%d\n", $nn, $nl;
+		$stwd = '!SENT_START';
+		printf NETFILE "I=%-4d W=%s\n", 0, $stwd;
+		$enwd = '!SENT_START';
+		$word = 'SENTENCE-END';
+		$num{$word} = 1;
+		$words{1} = $word;
+		printf NETFILE "I=%-4d W=%s\n", 1, $enwd;
+		$nullwd = '!NULL';
+		printf NETFILE "I=%-4d W=%s\n", 2, $nullwd;
+		$ln = 3;
+	}
+	if ($#Fld == 1) {
+		printf NETFILE "I=%-4d W=%s\n", $ln++, $Fld[1];
+	}
+}
+
+$like = -log($ln - 2);
+printf NETFILE "J=%-5d S=%-4d E=%-4d l=%.4f\n", $la++, 0, 2, 0.0;
+printf NETFILE "J=%-5d S=%-4d E=%-4d l=%.4f\n", $la++, 2, 1, $like;
+for ($i = 3; $i < $ln; $i++) {
+	printf NETFILE "J=%-5d S=%-4d E=%-4d l=%.4f\n", $la++, 2, $i, $like;
+}
+for ($i = 3; $i < $ln; $i++) {
+	printf NETFILE "J=%-5d S=%-4d E=%-4d l=%.4f\n", $la++, $i, 2, 0.0;
+}
+
+close(NGFILE);
+close(NETFILE);

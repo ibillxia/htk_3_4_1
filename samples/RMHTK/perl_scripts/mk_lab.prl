@@ -1,0 +1,30 @@
+#!/usr/local/bin/perl
+
+#
+# This script will generate the label file from the encoded data list file.
+#
+# TL 7/1998
+#
+
+if ( $#ARGV != 1 ) {
+	die "usage: mk_lab.prl encoded_data_list extension(of encoded data file).\n";
+}
+
+$datfile = $ARGV[0];
+if ( ! -f $datfile ) {
+   die "encoded data list file $datfile not found. Aborting!\n";
+}
+
+$extn = $ARGV[1];
+
+($labfile = $datfile) =~ s/scp/lab/;
+printf "generate label file $labfile from file $datfile\n";
+
+open(DATFILE,"<$datfile") or die "Can't open file $datfile\n";
+open(LABFILE,">$labfile") or die "Can't open file $labfile\n";
+while (<DATFILE>) {
+	s/.$extn/.lab/;
+	printf LABFILE;
+}
+close(DATFILE);
+close(LABFILE);

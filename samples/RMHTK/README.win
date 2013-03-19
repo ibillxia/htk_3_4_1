@@ -1,0 +1,1577 @@
+
+			*************RM DEMO for Perl User*****************
+
+This recipe does not include some of the more advanced features in HTK V3.4.
+For more information on these see the "README" in this directory where
+a more complete recipe for linux is given. It is hoped to 
+revise this recipe at some later date [or updates from users welcome!] 
+
+The following document is a guide to how to build HTK based systems for
+the ARPA RM task.
+The systems described have not necessarily been optimised and so the results
+should not be taken as 'the best that can be done' but more as a baseline.
+Note that most of the HTK research work at CUED involves continuous density 
+models and little effort has been put in to optimising the performance of 
+the discrete and tied mixture systems and so these are definitely naive
+baseline results.
+
+Although it may seem that a lot of preparation work has been done to keep
+this recipe short most of the scripts are highly configurable and should
+be usable for many tasks.  The more specific gawk and sed commands were
+relatively simple to produce and the need to duplicate their functionality
+(for instance to produce the networks or model lists) should not 
+discourage the user who wishes to attempt new tasks.
+
+Note.  This is not a guide to setting up HTK and for the recipe to work
+       HTK must be correctly installed and all the executables including 
+       in the users path.  
+
+---------------------------------------------------------------------
+
+
+                          RM RECIPE
+                          =========
+
+To make sure that Perl will run correctly, ie to be able to see its library,
+you should first go to directory 'Perl\bin' and run the MS_DOS batch file
+'perlw32-install' to set up its paths correctly.
+
+The environment variable RMSCRIPTS (the perl_scripts path) must be set.
+The global variables RMCD1, RMCD2, RMDATA, RMLIB, and RMWORK
+should be set appropriately, and the directories %RMDATA%, %RMLIB%, 
+and %RMWORK% should be created. These variables are stored in file 
+"%RMSCRIPTS%\global.pl". For convenience variables RMCD1, RMCD2, RMDATA, 
+RMLIB, and RMWORK should be also set as environment variable.
+The contents of the RMHTK\lib should be copied to %RMLIB% and the 
+contents of RMHTK\work should be copied to %RMWORK%.
+
+The various HTK scripts as well as all the HTK tools should be in the
+current path.  The scripts are in the directory RMHTK\perl_scripts.
+
+The recipe provides instructions for creating several types of
+systems.
+
+1)  Single mixture monophones 
+2)  Multiple mixture monophones  [from 1]
+3)  Tied-mixture monophones [from 1 or 2]
+4)  Discrete density monophones [with data aligned by 1 or 2]
+5)  Single mixture word internal triphones [from 1]
+6)  Tied mixture word internal triphones [from 2]
+7)  Single mixture cross word triphones [from 1]
+8)  Tied state triphones (data driven clustering) [from 5]
+9)  Tied state triphones (decision tree clustering) [from 5 or 7]
+10) Speaker adaptive training [from 9]
+11) Discriminative Training [from 9 - requires HDecode HTK extension]
+12) Linear transformation estimation (semi-tied HLDA) [from 9]
+13) Multiple stream systems [from 9]
+
+As this shows there are many routes through this demo.
+These instruction will explain (and give results for) the sequences
+1 -> 2 -> 3,
+1 -> 4,
+1 -> 2 -> 6,
+1 -> 5 -> 8,
+1 -> 7 -> 9 -> 10 -> 11
+
+The following instructions should be followed exactly as given, with
+close attention paid to the naming conventions for files and directory
+hierarchies.  
+
+0. Setting Up
+=============
+
+0.1  Copy the NIST file lists from RMCD2
+
+Copy the speaker independent file lists.
+ > cd %RMLIB%
+ > mkdir ndx
+ > perl %RMSCRIPTS%\get_ndx.prl
+
+If "get_ndx.prl" fails to extract all the required files, extract *.ndx files manually from "test" and 
+"train" directories of RMCD2.
+
+From this point, the command line will be typed as "get_ndx.prl" for short 
+of "perl %RMSCRIPTS%\get_ndx.prl"
+
+0.2  Coding the data using the coderm script
+
+This can code either the speaker independent or speaker dependent data
+and uses the file lists created in Step 0.1. Initially, just speaker independent 
+data is required.  Allow approximately 100MB of disk space for
+this.  The file-lists created are stored in %RMLIB%\flists.  
+
+ > mkdir %RMDATA%
+ > mkdir %RMLIB%\flists
+ > cd %RMLIB%
+ > coderm.prl ndx %RMCD1% ind train %RMDATA% configs\config.code flists\train.scp 
+ > coderm.prl ndx %RMCD2% ind dev_aug %RMDATA% configs\config.code flists\dev_aug.scp
+
+
+Now make script files for both the mfc data and label files.
+
+ > cd %RMLIB%\flists
+ > type train.scp dev_aug.scp > ind_trn109.scp
+ > mk_lab.prl ind_trn109.scp mfc
+
+Also code the four speaker independent test sets and create script files
+for complete test label files.
+
+ > cd %RMLIB%
+ > coderm.prl ndx %RMCD2% ind feb89 %RMDATA% configs\config.code flists\ind_feb89.scp
+ > coderm.prl ndx %RMCD2% ind oct89 %RMDATA% configs\config.code flists\ind_oct89.scp
+ > coderm.prl ndx %RMCD2% ind feb91 %RMDATA% configs\config.code flists\ind_feb91.scp
+ > coderm.prl ndx %RMCD2% ind sep92 %RMDATA% configs\config.code flists\ind_sep92.scp
+
+ > cd %RMLIB%\flists
+ > type ind_feb89.scp ind_feb91.scp ind_oct89.scp ind_sep92.scp > ind_tst.scp
+ > mk_lab.prl ind_tst.scp mfc
+
+If Adaptation is required, then the 3rd CDROM (data dependent) is required.  Get the
+adaptation training data:
+
+> cd %RMLIB%
+> coderm.prl ndx %RMCD3% dep traina %RMDATA% configs\config.code flists\traina.scp
+
+And the adaptation test data:
+
+ > coderm.prl ndx %RMCD2% dep dms0_tst %RMDATA% configs\config.code flists\dms0_tst.scp
+
+ > cd %RMLIB%\flists
+ > mk_lab.prl traina.scp mfc
+ > mk_lab.prl dms0_tst.scp mfc
+
+
+0.3  Fixing the coded data files that are corrupt on the CD-ROM
+
+A very few files on the CD-ROM have a long series of identical
+time-domain values. These should be removed since the net effect is to
+cause the differential and second differential components to be zero
+with zero variance. The files which are corrupted were identified
+automatically as having a run of 250 or more identical time domain
+samples.  Use the script fixrm and the file list %RMLIB%\corrupt to
+delete these frames. Note that %RMLIB%\corrupt includes the corrupt
+frame numbers and this assumes that the default 10ms frames have been
+used by coderm.  All the corrupt frames are in the silence portion of
+the files.  Note that no speaker dependent data has been checked for
+corrupt files.
+
+ > fixrm.prl %RMLIB%\corrupt %RMDATA%
+
+
+0.4  Create word-level label files (and associated lists) for the test sets
+
+This uses grep, gawk and sed to convert the SNOR word-level transcriptions 
+distributed on the CD-ROMs into HTK format.  gawk is the public domain
+GNU version of awk which is specified because of its built in tolower 
+command that allows the uppercase file names in SNOR format to be
+converted to lower-case.  Many versions of nawk also have this functionality,
+if gawk is not installed but nawk is, use nawk, otherwise use perl on this 
+occasion and awk elsewhere.
+First we create generic label files based on the prompts.
+
+ > cd %RMLIB%
+ > copy %RMCD2%\rm1\doc\al_sents.snr sents.snr
+ > mkdir wlabs   
+ > mk_mlf.prl sents.snr wlabs\all.mlf
+
+Now create specific labels for the actual files.
+
+ > cd %RMLIB%
+ > echo # > null.hled
+ > copy null.hled wlabs
+ > HLEd -l * -i wlabs\ind_trn109.mlf -I wlabs\all.mlf \
+	-S flists\ind_trn109.lab wlabs\null.hled
+ > HLEd -l * -i wlabs\ind_tst.mlf -I wlabs\all.mlf \
+	-S flists\ind_tst.lab wlabs\null.hled
+ > HLEd -l * -i wlabs\traina.mlf -I wlabs\all.mlf \
+	-S flists\traina.lab wlabs\null.hled
+ > HLEd -l * -i wlabs\dms0_tst.mlf -I wlabs\all.mlf \
+	-S flists\dms0_tst.lab wlabs\null.hled
+
+
+
+1. Creating a Base-Line Monophone Set
+=====================================
+
+1.1  Basic dictionary and phone list creation
+
+Copy the SRI dictionary from the CD-ROM. You should read the header of
+this file to determine the conditions of use.  Dictionaries are stored
+in %RMLIB%\dicts. Model lists are stored in %RMLIB%\mlists.
+
+ > cd %RMLIB%
+ > mkdir mlists
+ > copy %RMCD2%\score\src\rdev\pcdsril.txt dicts
+
+Use the tool HDMan to transform the dictionary.  The supplied HDMan
+script mono.ded should be in %RMLIB%\dicts.
+
+Before running HDMan, check that file sil.txt in %RMLIB%\dict is 
+in right alphabet order, ie SENT_END before SENT_START
+ > cd %RMLIB%\dicts
+ > HDMan -T 1 -a *; -n %RMLIB%\mlists\mono.list  \
+	-g mono.ded mono.dct pcdsril.txt sil.txt
+
+
+1.2  Training set phone label file creation
+
+Create the training set phone label files including optional
+inter-word silence (sp) models (the sp models are tee models) and
+forced silence (sil) at the ends of each utterance.
+
+ > cd %RMLIB%
+ > HLEd -l * -i labs\mono.mlf -d dicts\mono.dct labs\mono.hled \
+   wlabs\ind_trn109.mlf
+
+
+1.3  Initial phone models
+
+The supplied initial models should be in the directory %RMWORK%\R1\hmm0 .
+Note that the MODELS file also contains a varFloor vector which
+was calculated by using HCompV
+
+> cd %RMWORK%\R1
+> HCompV -C %RMLIB%\configs\config.basic -S %RMLIB%\flists\ind_trn109.scp \
+        -f 0.01 -m varProto
+
+The supplied HTK Environment file HTE should also be in %RMWORK%\R1.  
+This contains a number of shell variables that are used by the 
+various training and testing scripts.  Edit the HTE file so that 
+it reflects your particular directory setup.
+
+
+1.4  Model training
+
+Re-estimate the models in hmm0 for four iterations of HERest.
+
+ > cd %RMWORK%\R1
+ > hbuild.prl 1 4
+
+This should create the directories %RMWORK%\R1\hmm[1-4]. Each of these
+directories should contain a LOG file and also %RMWORK%\R1 will contain
+a file called blog which records the build process. After running
+hbuild the various LOG files should be checked for error messages.
+
+
+1.5  Building the recognition networks
+
+Copy the word-pair grammar from the CD-ROM to %RMLIB%.
+
+ > cd %RMLIB%
+ > mkdir nets
+ > copy %RMCD2%\rm1\doc\wp_gram.txt %RMLIB%\nets
+
+Use the supplied perl scripts to generate word level networks for
+both the word-pair and no-grammar test conditions.  Note that the
+language model likelihoods are based solely on the number of successors
+for each word.
+
+ > cd %RMLIB%\nets
+ > wp_net.prl wp_gram.txt net.wp 993 57704
+ > ng_net.prl %RMLIB%\wordlist net.ng 994 1985 
+
+1.6  Testing the Monophone Models
+
+Check that all the recognition variables in HTE are set up correctly.
+In particular if you wish to use the NIST scoring package distributed
+on the CD-ROMs, make sure that NISTSCORE is set. The recognition tests
+use the script htestrm. The recognition parameters are set in the HTE
+file as for hbuild.  htestrm allows the specification of the test set,
+the recognition mode (ng or wp) and automatically creates test
+directories for a number of runs (typically with different recognition
+parameters and perhaps run simultaneously on different machines). Test
+directories are created as sub-directories of the model directories.
+The first run on a particular hmm set with ng on the feb89 test set
+would be called test_ng_feb89.1, the second run test_ng_feb89.2, and
+tests with wp and other test-sets named according to the above
+convention.
+
+A number of parameters can be tuned including the grammar scale factor
+HVGSCALE variable (HVite -s) and inter-word probability HVIMPROB
+(HVite -p).  These flags both control the ratio of insertion and
+deletion errors.  HVite pruning is controlled by variables HVPRUNE
+(HVite -t) and HVMAXACTIVE (HVite -u). All of these values are
+supplied in an indexed list that correspond to the different test types
+listed in the HTE variable TYPELIST (here either ng or wp). The
+HVPRUNE values should be set at a higher value for wp testing than ng
+testing.
+
+After htestrm runs HVite, HResults is executed. The equivalent sets
+(homophone lists) for the different test conditions are listed in
+files specified by the HREQSETS variable. These sets are defined by
+DARPA\NIST and suitable files (eq.wp and eq.ng) are supplied with the
+distribution. If the variable HRNIST is set HResults operates in a
+manner that is compatible with the NIST scoring software and results
+identical to those from the NIST software should be obtained.
+
+If the NIST scoring software has been compiled, then after HResults
+has been run the output of HVite can be converted to a NIST
+compatible "hypothesis" file using the RM tool HLab2Hyp and then
+running the appropriate NIST scoring script. These steps will be
+performed by htestrm if the HTE variable NISTSCORE is set. Note that 
+the NIST scoring tools should be in your path if you set NISTSCORE.
+Although the raw results obtained from the NIST software should be 
+identical to the HResults output, the NIST output files can give 
+additional information that can be useful for understanding recognizer
+performance. 
+
+NOTE that the NISTSCORE option is for running under UNIX
+OS only, for running under NT machine this option is not available.
+
+To test the models in %RMWORK%\R1\hmm4 with the feb89 test set and with
+a word-pair grammar and the current recognition settings in HTE,
+execute the following
+
+ > cd %RMWORK%\R1
+ > htestrm.prl HTE wp feb89 hmm4
+
+Run other tests under a number of ng/wp conditions on different test
+sets as desired.
+
+
+2. Multiple Mixture Monophones
+==============================
+
+2.1  Mixture splitting
+
+The models created in Step 1 will be converted to multiple mixture
+models by iterative "mixture splitting" and re-training.
+Mixture-splitting is performed by HHEd by taking an output distribution
+with M output components, choosing the components with the largest
+mixture weights and making two mixtures where there was one before by
+perturbing the mean values of the split mixture components. This can
+be done on a state-by-state basis but here all states will be mixture
+split.
+
+A script interface to HHEd called hedit takes a script of HHEd
+commands and applies them. First two-mixture models will be created,
+with the initial models in %RMWORK%\R2\hmm10 formed by
+mixture-splitting the models in %RMWORK%\R1\hmm4.
+
+First create the directory to hold the multiple mixture monophones and
+link all the files and directories to the new directory.
+
+ 
+ > cd %RMWORK%
+ > mkdir R2
+ > copy R1\HTE R2
+ > xcopy R1\hmm4 R2\hmm4
+ > cd R2
+
+Now store the HHEd commands required in a file called edfile4.10 in
+%RMWORK%\R2. This file need contain only the line
+
+ MU 2 {*.state[2-4].mix}
+
+This command this will split into 2 mixtures all the states of all
+models in the HMMLIST defined in the HTE file. Now invoke hedit by
+
+ > echo MU 2 {*.state[2-4].mix} > edfile4.10
+ > hedit.prl HTE 4 10
+
+This creates 2 mixture initial hmms in %RMWORK%\R2\hmm10 .
+
+2.2  Retraining and testing the two-mixture models
+
+Run four iterations of  HERest to re-train the models
+
+ > cd %RMWORK%\R2
+ > hbuild.prl 11 14
+
+and then test them with HVite (again recognition settings may need
+adjusting).
+
+ > cd %RMWORK%\R2
+ > htestrm.prl HTE wp feb89 hmm14
+
+and run other tests as required.
+
+2.3  Iterative mixture-splitting
+
+The mixture splitting and re-training can be done repeatedly and it is
+suggested that after the 2 mixture models are trained in order 3
+mixture, 5 mixture 7 mixture, 10 mixture and 15 mixture models are
+trained.  Each cycle requires forming a file containing the
+appropriate HHEd MU command, running hedit, running hbuild and then
+testing the models with htestrm.
+
+Note that it is quite possible to go straight from 1 mixture models to
+5 mixture models. However usually better performance results from a
+given number of mixture components if the model complexity is
+increased in stages.
+
+3. Tied Mixture Monophones
+==========================
+
+3.1  Tied Mixture Initialisation
+
+The models created in step 2 will be converted to a set of tied-mixture
+models using HHEd.  This conversion is performed in three phases.
+First the set of Gaussians that represent the models are pooled by
+choosing those with the highest weights.  Then the models are rebuilt
+to share these Gaussians and the mixture weights recalculated.
+Finally the representation of the models changed to TIEDHS.
+
+First create the directory to hold the tied mixture monophones and
+copy over the HTE file.
+
+ > mkdir %RMWORK%\R3
+ > cd %RMWORK%
+ > copy R2\HTE R3
+
+Create an HHEd edit file in %RMWORK%\R3 called tied.hed containing the
+following commands.
+
+ JO 128 2.0
+ TI MIX_ {*.state[2-4].stream[1].mix}
+ HK TIEDHS
+
+Create a directory for the initial tied mixture models and run HHEd.
+
+ > cd %RMWORK%\R3
+ > echo JO 128 2.0 > tied.hed
+ > echo TI MIX_ {*.state[2-4].stream[1].mix} >> tied.hed
+ > echo HK TIEDHS >> tied.hed
+ > mkdir hmm0
+ > HHEd -T 1 -H %RMWORK%\R2\hmm4\MODELS -w hmm0\MODELS tied.hed \
+	%RMLIB%\mlists\mono.list
+
+3.2  Tied Mixture training and testing
+
+In the HTE file the line
+
+ set TMTHRESH=20
+
+now controls tied mixture as well as forward pass mixture pruning.
+Finally build the models
+
+ > cd %RMWORK%\R3
+ > hbuild.prl 1 4
+
+and then test them with HVite (NB! recognition settings will need adjusting.  
+Try setting the grammar scale to 2.0 rather than 7.0 and speed things up
+a little by changing the pruning beam width from 200.0 to 100.0).
+
+ > cd %RMWORK%\R3
+ > htestrm.prl HTE wp feb89 hmm4
+
+
+4. Discrete Density Monophones
+==============================
+
+4.1  Vector quantiser creation
+
+Since all the observation have to be held in memory for this operation
+(which can be computationally expensive) we will perform this on a 
+subset of the data. Please note that this process can take a considerable
+amount of time.
+
+ > mkdir %RMWORK%\R4
+ > cd %RMWORK%\R4
+ > mk_sub_list.prl 10 1 %RMLIB%\flists\ind_trn109.scp ind_trn109.sub.scp
+ > HQuant -A -T 1 -d -n 1 128 -n 2 128 -n 3 128 -n 4 32 -s 4 -S \
+     ind_trn109.sub.scp -C %RMLIB%\configs\config.basic vq.table
+
+4.2  Align data and initialise discrete models
+
+To create some discrete models we are going to use HInit and HRest both
+of which need data aligned at the phone level.  We will use the monophones
+from either R1 or R2 to generate phone labels for the subset of the data
+used for the codebook.
+
+ > HVite -A -T 1 -C %RMLIB%\configs\config.basic -H ..\R1\hmm4\MODELS \
+    -a -m -o SW -i ind_trn109.sub.mlf -X lab -b !SENT_START \
+    -l * -y lab -I %RMLIB%\wlabs\ind_trn109.mlf -t 500.0 -s 0.0 -p 0.0 \
+    -S ind_trn109.sub.scp %RMLIB%\dicts\mono.dct %RMLIB%\mlists\mono.list
+
+4.3  Create a prototype hmm set
+
+This can be done using the discreteMonoSet perl script or by creating
+a file like the one below for each of the models apart from sp which should
+only have three states so that is reproduced in full.
+
+  ~o <VecSize> 39 <MFCC_E_D_A_V> <StreamInfo> 4 12 12 12 3 
+  ~h "aa"
+<BeginHMM>
+  <NumStates> 5
+  <State> 2 <NumMixes> 128 128 128 32 
+  <Stream> 1
+      <DProb> 11508*128
+  <Stream> 2
+      <DProb> 11508*128
+  <Stream> 3
+      <DProb> 11508*128
+  <Stream> 4
+      <DProb> 8220*32
+
+  <State> 3 <NumMixes> 128 128 128 32 
+  <Stream> 1
+      <DProb> 11508*128
+  <Stream> 2
+      <DProb> 11508*128
+  <Stream> 3
+      <DProb> 11508*128
+  <Stream> 4
+      <DProb> 8220*32
+
+  <State> 4 <NumMixes> 128 128 128 32 
+  <Stream> 1
+      <DProb> 11508*128
+  <Stream> 2
+      <DProb> 11508*128
+  <Stream> 3
+      <DProb> 11508*128
+  <Stream> 4
+      <DProb> 8220*32
+
+  <TransP> 5
+   0.000e+0   1.000e+0   0.000e+0   0.000e+0   0.000e+0
+   0.000e+0   6.000e-1   4.000e-1   0.000e+0   0.000e+0
+   0.000e+0   0.000e+0   6.000e-1   4.000e-1   0.000e+0
+   0.000e+0   0.000e+0   0.000e+0   6.000e-1   4.000e-1
+   0.000e+0   0.000e+0   0.000e+0   0.000e+0   0.000e+0
+<EndHMM>
+
+  ~o <VecSize> 39 <MFCC_E_D_A_V> <StreamInfo> 4 12 12 12 3 
+  ~h "sp"
+<BeginHMM>
+  <NumStates> 3
+  <State> 2 <NumMixes> 128 128 128 32 
+  <Stream> 1
+      <DProb> 11508*128
+  <Stream> 2
+      <DProb> 11508*128
+  <Stream> 3
+      <DProb> 11508*128
+  <Stream> 4
+      <DProb> 8220*32
+
+  <TransP> 3
+   0.000e+0   6.000e-1   4.000e-1 
+   0.000e+0   6.000e-1   4.000e-1 
+   0.000e+0   0.000e+0   0.000e+0 
+<EndHMM>
+
+ > mkdir hmm0
+ > copy %RMLIB%\mlists\mono.list .
+ > perl %rmscripts%\discreteMonoSet.prl mono.list %RMLIB%\discrete.hmm %RMLIB%\discrete.sp
+
+Then initialise the models.
+
+ > mkdir hmm1
+ > init_discrete.prl mono.list %RMLIB%\configs\config.discrete \
+	hmm0 hmm1 ind_trn109.sub.mlf ind_trn109.sub.scp
+
+And reestimate them.
+
+ > mkdir hmm2
+ > rest_discrete.prl mono.list %RMLIB%\configs\config.discrete \
+	hmm1 hmm2 ind_trn109.sub.mlf ind_trn109.sub.scp
+ 
+Create an HHEd script edfile2.3 with the single command
+
+  AT 1 3 0.8 { sp.transP }
+
+This will add back the tee-transition in sp deleted by HInit and
+HRest and will also produce a single MMF
+
+ > echo AT 1 3 0.8 { sp.transP } > edfile2.3
+ > mkdir hmm3
+ > HHEd -A -T 1 -d hmm2 -w hmm3\MODELS edfile2.3 %RMLIB%\mlists\mono.list
+
+Copy the standard HTE file from the R1 directory and change the
+configuration file names to use the discrete configuration file.
+
+> copy %RMWORK%\R1\HTE
+setenv HECONFIG %RMLIB%\\configs\\config.discrete
+setenv HVCONFIG %RMLIB%\\configs\\config.discrete
+
+Then train the models
+
+ > hbuild.prl 4 7 
+
+and then test them with HVite (recognition settings will need adjusting.  
+Try setting the grammar scale to 2.0 rather than 7.0 and speed things up
+a little by changing the pruning beam width from 200.0 to 100.0).
+
+ > cd %RMWORK%\R4
+ > htestrm.prl HTE wp feb89 hmm7
+
+
+*5. Single-Mixture Word-Internal Triphones
+=========================================
+
+5.1  Triphone dictionary and model-list creation
+
+First a new dictionary is needed. This can be created using the
+tool HDMan with the supplied script tri.ded. This creates
+word-internal triphones for each word in the dictionary and creates a
+context-dependent model list as a by-product. Create a triphone
+dictionary as follows.
+
+ > cd %RMLIB%\dicts
+ > HDMan -T 1 -n %RMLIB%\mlists\tri.list -g tri.ded tri.dct mono.dct
+
+
+5.2  Triphone training label files
+
+Create the triphone phone-level training label files
+in the file %RMLIB%\labs\tri.mlf.
+
+ > cd %RMLIB%
+ > HLEd -l * -i labs\tri.mlf -d dicts\tri.dct labs\tri.hled wlabs\ind_trn109.mlf
+
+
+5.3  Initial models
+
+Next an initial set of triphone models are created by cloning the
+monophone models using HHEd. First create a directory with a copy of
+R1\HTE.
+
+ > cd %RMWORK%
+ > mkdir R5
+ > copy R1\HTE R5	
+
+Edit R5\HTE to change the title, HMMLIST, TRAINMLF and HVVOC
+parameters replacing mono with tri:
+mono.list --> tri.list
+mono.mlf  --> tri.mlf
+tri.dct   --> mono.dct
+	
+For convenience, create local copies (links) of both the monophone
+list and the triphone list.
+
+ > cd %RMWORK%\R5
+ > copy %RMLIB%\mlists\mono.list mono.list
+ > copy %RMLIB%\mlists\tri.list tri.list
+ 	
+Create an HHEd edit file in %RMWORK%\R5 called clone.hed containing the
+following commands.
+
+ MM "trP_" { *.transP }
+ CL "tri.list"
+ 	
+Create a directory for the initial cloned triphones and run HHEd.
+
+ > echo MM "trP_" { *.transP } > clone.hed
+ > echo CL "tri.list" >> clone.hed
+ > mkdir hmm0
+ > HHEd -B -T 1 -H %RMWORK%\R1\hmm4\MODELS -w hmm0\MODELS clone.hed mono.list
+
+
+5.4  Triphone training
+
+The HERest pruning threshold should be increased for triphone models.
+In HTE, change the value of HEPRUNE to 1000.0. Then build the new set
+of models using hbuild.
+Note that for future use (state-clustering) a statistics file for the
+final run should be created. This is achieved by the following line
+in the HTE file.
+
+ set HESTATS=stats   
+
+ > cd %RMWORK%\R5
+ > hbuild.prl 1 2
+
+5.5  Triphone Testing
+
+Test the models using  htestrm as usual.
+
+ > htestrm.prl HTE wp feb89 hmm2
+
+It may be found that it is necessary to adjust some of the word-insertion or
+pruning penalties for triphone models.
+
+6. Tied-Mixture Word-Internal Triphones
+=======================================
+
+6.1  Tied Mixture Initialisation
+
+The models created in step 2 will be converted to a set of triphones
+in a similar way to that used in step 5.
+At the same time the single stream continuous models will be converted
+to tied-mixture and expanded to use four streams.
+
+First create an initial set of models.
+
+ > mkdir %RMWORK%\R6
+ > cd %RMWORK%
+ > copy R2\HTE R6
+ > cd R6
+ > copy %RMLIB%\mlists\mono.list mono.list
+ > copy %RMLIB%\mlists\tri.list tri.list
+
+Do not forget to convert "mono" parts of HTE into the corresponding "tri" parts.
+Create an HHEd edit file in %RMWORK%\R6 called clone.hed containing the
+following commands.
+
+ MM "trP_" { *.transP }
+ SS 4
+ JO 128 2.0
+ TI MIX_1_ {*.state[2-4].stream[1].mix}
+ JO 128 2.0
+ TI MIX_2_ {*.state[2-4].stream[2].mix}
+ JO 128 2.0
+ TI MIX_3_ {*.state[2-4].stream[3].mix}
+ JO 32 2.0
+ TI MIX_4_ {*.state[2-4].stream[4].mix}
+ HK TIEDHS
+ CL "tri.list"
+
+
+Create a directory for the initial cloned triphones and run HHEd.
+
+ > mkdir hmm0
+ > HHEd -B -T 1 -H %RMWORK%\R2\hmm14\MODELS -w hmm0\MODELS clone.hed mono.list
+
+Then train the models
+
+ > hbuild.prl 1 2
+
+and test them using  htestrm as usual.
+
+ > htestrm.prl HTE wp feb89 hmm2
+
+As a final stage to training it is possible to use deleted interpolation
+smoothing to provide more robust estimates for the mixture weights
+using HSmooth as the final stage of a parallel mode run of HERest
+
+ > mk_sub_list.prl 4 1 %RMLIB%\flists\ind_trn109.scp ind_trn109.1.scp
+ > mk_sub_list.prl 4 2 %RMLIB%\flists\ind_trn109.scp ind_trn109.2.scp
+ > mk_sub_list.prl 4 3 %RMLIB%\flists\ind_trn109.scp ind_trn109.3.scp
+ > mk_sub_list.prl 4 0 %RMLIB%\flists\ind_trn109.scp ind_trn109.4.scp
+
+ > mkdir hmm3 
+ > HERest -A -H hmm2\MODELS -M hmm3 -T 1 -I %RMLIB%\labs\tri.mlf   \
+    -w 2.0 -t 600.0 -c 20.0 -C %RMLIB%\configs\config.basic        \
+    -p 1 -S ind_trn109.1.scp %RMLIB%\mlists\tri.list > hmm3\LOG1
+ > HERest -A -H hmm2\MODELS -M hmm3 -T 1 -I %RMLIB%\labs\tri.mlf   \
+    -w 2.0 -t 600.0 -c 20.0 -C %RMLIB%\configs\config.basic        \
+    -p 2 -S ind_trn109.2.scp %RMLIB%\mlists\tri.list > hmm3\LOG2
+ > HERest -A -H hmm2\MODELS -M hmm3 -T 1 -I %RMLIB%\labs\tri.mlf   \
+    -w 2.0 -t 600.0 -c 20.0 -C %RMLIB%\configs\config.basic 	   \
+    -p 3 -S ind_trn109.3.scp %RMLIB%\mlists\tri.list > hmm3\LOG3
+ > HERest -A -H hmm2\MODELS -M hmm3 -T 1 -I %RMLIB%\labs\tri.mlf   \
+    -w 2.0 -t 600.0 -c 20.0 -C %RMLIB%\configs\config.basic        \
+    -p 4 -S ind_trn109.4.scp %RMLIB%\mlists\tri.list > hmm3\LOG4
+
+
+then
+ > HSmooth -A -H hmm2\MODELS -M hmm3 -T 1 -m 1 -w 2.0 -s hmm3\stats    \
+    -C %RMLIB%\configs\config.basic %RMLIB%\mlists\tri.list \ 
+    hmm3\HER1.acc hmm3\HER2.acc hmm3\HER3.acc hmm3\HER4.acc 
+
+Finally test these models as usual
+
+ > htestrm.prl HTE wp feb89 hmm3
+
+
+*7. Single-Mixture Cross-Word Triphones
+======================================
+
+7.1  Triphone model-list and training label file creation
+
+First a set of cross word labels and a model list is needed for
+training.
+These are generated using HLEd and the monophone label file.
+
+ > HLEd -l * -n %RMLIB%\mlists\xwrd.list -i %RMLIB%\labs\xwrd.mlf   \
+    %RMLIB%\labs\xwrd.hled %RMLIB%\labs\mono.mlf
+
+Note that this model list will not contain many of the triphones
+needed for testing (especially in the ng case).  These models
+will have to be synthesised later.
+
+
+7.2  Initial models
+
+Next an initial set of triphone models are created by cloning the
+monophone models using HHEd. First create a directory with a copy of
+R1\HTE.
+
+ > cd %RMWORK%
+ > mkdir R7
+ > copy R1\HTE R7
+
+Edit R7\HTE to change the title, HMMLIST and TRAINMLF
+parameters replacing mono with xwrd.
+	
+For convenience, create local copies (links) of both the monophone
+list and the triphone list.
+
+ > cd %RMWORK%\R7
+ > copy %RMLIB%\mlists\mono.list mono.list
+ > copy %RMLIB%\mlists\xwrd.list xwrd.list
+ 	
+Create an HHEd edit file in %RMWORK%\R7 called clone.hed containing the
+following commands.
+
+ MM "trP_" { *.transP }
+ CL "xwrd.list"
+
+ > echo MM "trP_" { *.transP } > clone.hed
+ > echo CL "xwrd.list" >> clone.hed
+ 	
+Create a directory for the initial cloned triphones and run HHEd.
+
+ > mkdir hmm0
+ > HHEd -B -T 1 -H %RMWORK%\R1\hmm4\MODELS -w hmm0\MODELS clone.hed mono.list
+
+Seeing this model set can be very large it is best to save it in binary
+format by using the -B flag in the above command and adding 
+
+ HMODEL: SAVEBINARY = T
+
+to the training configuration file %RMLIB%\configs\config.basic
+
+ > echo HMODEL: SAVEBINARY = T >> %RMLIB%\configs\config.basic
+
+7.3  Triphone training
+
+The HERest pruning threshold should be increased for triphone models.
+In HTE, change the value of HEPRUNE to 1000.0. Then build the new set
+of models using hbuild.
+Note that for future use (state-clustering) a statistics file for the
+final run should be created and the models should be updated even
+if they only occur a few times. This is achieved by the following
+lines in HTE.
+
+ set HESTATS=stats
+ set HEMINEG=0
+
+ > cd %RMWORK%\R7
+ > hbuild.prl 1 2
+
+7.4  Cross-Word Triphone Testing
+
+As mentioned above due to lack of coverage of the test condition
+because of missing models it is impractical to test the unclustered
+cross word triphone system.  If the model list used for the CL 
+command above contained all models needed for recognition testing
+would be possible however many of the models would still be using
+monophone parameters.
+
+
+*8. State-Clustered Triphones
+============================
+
+8.1  State clustering
+
+In this section the triphones created in Step 5 will be state
+clustered, so that all states within the same cluster share a common
+output distribution. Corresponding states of different triphones of the
+same phone are candidates to be put in the same cluster.  The
+clustering process groups states with similar distributions and also
+ensures (via the HHEd RO command) that any states with too few
+occupations to allow reliable estimates of a multiple mixture
+distribution are discarded.
+
+8.2  Initial models
+
+The clustering process is performed by HHEd. To simplify preparing
+the HHEd script, mkclscript does most of the work.  Given the
+monophone model list it generates for each model commands to tie all
+the transition matrices of each triphone together and also to
+cluster the states. It is assumed that each model in the list has
+three states.
+
+However, the clustering commands should not be applied to the sil and
+sp models. First make a lost copy of mono.list and delete the entries
+for sp and sil, copy the HTE file from R5 and change the HMMLIST to use
+the clustered triphone list trig.list rather than the compete list
+tri.list
+
+ > mkdir %RMWORK%\R8
+ > cd %RMWORK%\R8
+ > copy %RMWORK%\R5\HTE .
+ > copy %RMLIB%\mlists\mono.list mono.list
+
+Edit file mono.list and delete line that contains 'sil' or 'sp'.
+
+Use the mkclscript to create the HHEd script
+
+ > echo RO 100.0 stats > cluster.hed
+ > mkclscript.prl TC 0.5 mono.list >> cluster.hed
+ > echo CO "trig.list" >> cluster.hed
+
+These lines tell HHEd to allow a minimum number of state occupations of
+100 and to compact the model set so that identical logical
+models share the same physical model list.  Also make the final stats
+stats generated in R5 present in the current directory by executing
+
+ > copy ..\R5\hmm2\stats stats
+
+Make a directory for the new state-clustered models and run HHEd
+
+ > mkdir hmm0
+ > HHEd -T 1 -H %RMWORK%\R5\hmm2\MODELS -w hmm0\MODELS cluster.hed \
+    %RMLIB%\mlists\tri.list > clog
+
+and copy the HMM list created to %RMLIB%\mlists.
+
+ > copy trig.list %RMLIB%\mlists
+
+
+8.3  Building state-clustered models
+
+Edit the title in HTE, and change the HMMLIST variable to 
+%RMLIB%\mlists\trig.list. Now build a set of single mixture-state 
+clustered triphones
+
+ > hbuild.prl 1 4
+
+and test them as before.
+
+ > htestrm.prl HTE wp feb89 hmm4
+
+
+8.4  Multiple mixture state-clustered triphones
+
+Multiple mixture models for the state-clustered triphones are built
+exactly as for the monophone multiple mixture models. However in this
+case since there are more output distributions models with a smaller
+number of mixtures/distribution are built.  It is suggested that 2
+mixture, 3 mixture, 4 mixture and then 5 mixture models be built, and
+at each stage 4 iterations of HERest be performed.
+
+To obtain the initial 2 mixture state-clustered triphones create the
+file %RMWORK%\R8\edfile4.10 containing the line
+
+ MU 2 {*.state[2-4].mix}
+
+ > echo MU 2 {*.state[2-4].mix} > %RMWORK%\R8\edfile4.10
+
+run hedit to build a new set of models in hmm10 and then hbuild
+
+ > hedit.prl HTE 4 10
+ > hbuild.prl 11 14
+
+etc., until the 6 mixture models are built.
+
+After each set of models have been build they can be tested using
+htestrm as usual.
+
+*9. Tree-Clustered Tied-State Triphones
+======================================
+
+9.1  State clustering
+
+In this section the triphones created in Step 5 or 7 will be state
+clustered.  However rather than using the data-driven method of 
+state clustering used in Step 8 a decision tree based one is used.
+This allows the synthesis of unseen triphones and thus makes it
+possible to produce cross-word context dependent systems.
+The clustering is used in a very similar way to that in Step 8 with
+sharing only possible within the same state of the same base phone.
+However the clustering proceeds in a top down manner by initially 
+grouping all contexts and then splitting on the basis of questions
+about context.  The questions used are chosen to maximise the
+likelihood of the training data whilst ensuring that each tied-state
+has a minimum occupancy (again using the HHEd RO command).
+
+
+9.2  Initial models
+
+The clustering process is performed by HHEd. To simplify preparing
+the HHEd script, mkclscript does most of the work and an example
+set of questions are supplied with the demo.  Given the
+monophone model list it generates for each model commands to tie all
+the transition matrices of each triphone together and also to
+cluster the states. It is assumed that each model in the list has
+three states.
+
+However, the clustering commands should not be applied to the sil and
+sp models. First make a lost copy of mono.list and delete the entries
+for sp and sil.
+
+ > mkdir %RMWORK%\R9
+ > cd %RMWORK%\R9
+ > copy %RMLIB%\mlists\mono.list mono.list
+ 
+Edit file mono.list and delete line that contains 'sil' or 'sp'.
+
+We also need to generate a list of the complete set of models needed 
+during recognition.  
+If we are still using word internal models (from R5) we just use the
+same triphone list
+
+ > set src=R5
+ > set list=tri.list
+ > copy %RMLIB%\mlists\tri.list unseen.list
+
+However for a cross-word system there are many contexts that we
+have not seen that can occur in our recognition networks.
+Rather than actually find out which models are needed it is
+easier to generate all possible monophones, biphones and triphones
+and this would also allow us to work with an arbitrary vocabulary.
+
+ > set src=R7
+ > set list=xwrd.list
+ > full_list.prl mono.list > unseen.list 
+
+Use the mkclscript to create the HHEd script
+
+ > copy %RMLIB%\quests.hed cluster.hed
+ > echo RO 100.0 stats >> cluster.hed
+ > mkclscript TB 600.0 mono.list >> cluster.hed
+ > echo ST "trees" >> cluster.hed
+ > echo AU "unseen.list" >> cluster.hed
+ > echo CO "treeg.list" >> cluster.hed
+
+These lines tell HHEd to allow a minimum number of state occupations of
+100 and to compact the model set so that identical logical
+models share the same physical model list.  Also make the file stats
+generated in R5 or R7 present in the current directory by executing
+
+ > copy ..\%src%\hmm2\stats stats
+
+Make a directory for the new state-clustered models and run HHEd
+
+ > cd %RMWORK%\R9
+ > mkdir hmm0
+ > HHEd -T 1 -B -H %RMWORK%\%src%\hmm2\MODELS -w hmm0\MODELS cluster.hed \
+    %RMWORK%\%src%\%list% > clog
+
+and copy the HMM list created to %RMLIB%\mlists.
+
+ > copy treeg.list %RMLIB%\mlists
+
+
+9.3  Building state-clustered models
+
+Copy %RMWORK%\%src%\HTE to the R9 directory, edit the title, and change
+the HMMLIST variable to %RMLIB%\mlists\treeg.list and change the
+recognition configuration to use the cross word file.  This sets
+FORCECXTEXP = TRUE to ensure that the cross word triphones are used
+rather than using the models with monophone or biphone context.
+It is also necessary to increase the pruning beam width somewhat as
+well as increase the word insertion penalty
+
+setenv HVCONFIG %RMLIB%\\configs\\config.xwrd
+
+set HVPRUNE=(200.0 300.0)
+
+set HVIMPROB=(0.0 0.0)
+
+Now build a set of single mixture-state clustered triphones
+
+ > hbuild.prl 1 4
+
+and test them as before.
+
+ > htestrm.prl HTE wp feb89 hmm4
+
+
+9.4  Multiple mixture state-clustered triphones
+
+Multiple mixture models for the state-clustered cross-word triphones 
+are built exactly as for the word-internal triphone models. 
+It is suggested that 2 mixture, 3 mixture, 4 mixture, 5 mixture and 
+then 6 mixture models be built, and at each stage 4 iterations of 
+HERest be performed.
+
+To obtain the initial 2 mixture state-clustered triphones create the
+file %RMWORK%\R9\edfile4.10 containing the line
+
+ MU 2 {*.state[2-4].mix}
+
+ > echo MU 2 {*.state[2-4].mix} > %RMWORK%\R9\edfile4.10
+
+run hedit to build a new set of models in hmm10 and then hbuild
+
+ > hedit.prl HTE 4 10
+ > hbuild.prl 11 14
+
+etc., until the 6 mixture models are built.
+
+After each set of models have been build they can be tested using
+htestrm as usual.
+
+NOTE:  Due to the 'two' pronunciations for each word, one ending
+       in sil and the other in sp, it is possible to get errors
+       due to no token reaching the end of the network when sp
+       is a significantly better model than sil.  These can be
+       avoided by raising the beam width (potentially wasteful)
+       or by tying the center state of the sil model to the emitting
+       state of the sp model and adding a transitions from 2->4,
+       3->2, 4->3 and 4->2 in the sil model.  This reduces its
+       minimum duration to 2 frames but more importantly allows
+       it to circulate between states.  See Step 7 of the Tutorial
+       in the HTKBook.
+
+10. Adaptation
+==============
+The systems generated so far have been speaker independent models.
+The performance of these models can be improved using speaker adaptation.
+HTK supports various forms of linear transformations of the model 
+parameters for both block and incremental adaptation. Note that some 
+HTE files you may need to take from %RMLIB%\mswin folder.
+
+10.1 Incremental MLLR adaptation
+
+The first step is to generate a regression class tree. Assuming that the
+6 component model is stored in hmm54, a regression class tree for that 
+model may be generated using (this assumes that a stats file has been
+generated).
+
+> cd hmm54
+> HHEd -A -D -V -T 1 -B -H MODELS -w DELETE.ME %RMLIB%\regtree_c2.hed \
+    %RMLIB%\mlists\treeg.list > regtree_c2.LOG
+> cd ..
+
+This should have generated two files regtree_2.tree and
+regtree_2.base. These are the regression class tree and associated
+baseclasses respectively . Using these regression class trees it is
+possible to incrementally generate MLLR transforms.  Add the following
+lines to the HTE file
+
+# Specify the form of transform to be generated
+setenv HVXFORMCONFIG %RMLIB%\\configs\\config.mllr
+
+# HVite adaptation options
+set HVSPKRMASK      = '*\%%%%%%_*.mfc'
+set HVFORCEXFORMDIR = (%RMWORK%\R9\hmm54)
+set HVOUTXFORMEXT   = mllr1
+set HVINCADAPT      = 1
+
+HVFORCEXFORMDIR (and the related HEFORCEXFORMDIR) allow directories
+to be specified for the various transformation macros to be found. 
+The information associated with precisely which transform is used
+is stored in the LOG file. In the above case the line is required to
+specify where the correct regression class tree (and associated
+base classes) are stored.
+
+Run htestrm as usual to perform incremental adaptation. The final 
+transform is stored in the test directory (assumed to be 
+ hmm54\test_wp_feb89.2). When generating transforms extensions to the
+transforms are extensively used. In this case mllr1. This final
+transform can then be used as the input transform. First comment out
+HVINCADAPT in the HTE file and add
+
+set HVINXFORMEXT    = mllr1
+
+This specifies the extension of the transform for decoding. To decode run 
+
+> htestrm.prl HTE wp feb89 hmm54 hmm54\test_wp_feb89.2
+
+10.2 Speaker Adaptive Training
+
+For some tasks it is useful to use adaptive training. Adaptive
+training with constrained MLLR transforms is fully supported in HTK.
+First copy the 6 component models and the regression class trees.
+
+ > mkdir %RMWORK%\R10
+ > cd %RMWORK%\R10
+ > mkdir hmm0
+ > copy %RMWORK%\R9\hmm54\MODELS hmm0
+ > copy %RMWORK%\R9\hmm54\regtree_2.* hmm0
+
+Copy the HTE files associated with SAT training.
+
+ > copy %RMLIB%\htefiles\HTE.sat.model .
+ > copy %RMLIB%\htefiles\HTE.sat.xform .
+ > copy %RMLIB%\htefiles\HTE.align .
+
+First generate the CMLLR transforms for the adaptive training
+
+>  herest.prl HTE.sat.xform hmm0 hmm0\cmllr
+
+Then generate the models. This uses the above transforms as the input and the
+parent xforms. It is important that the transform is used as a parent transform
+as well as the input transform, otherwise the model will be generated in the 
+original model space.
+
+>  herest.prl HTE.sat.model hmm0 hmm1 hmm0\cmllr
+>  herest.prl HTE.sat.model hmm1 hmm2 hmm0\cmllr
+
+To use these models for recognition with no supervised data, first the 
+standard models are used for recognition. The output from these are
+then used to obtain the phone level transcription. 
+
+> mkdir hmm0\wlabs
+> copy %RMWORK%\R9\hmm54\test_wp_feb89.1\wp_feb89.mlf hmm0\wlabs
+> htestrm.prl HTE.align wp feb89 hmm0
+> herest.prl HTE.align hmm0 hmm0\cmllr1
+
+It is useful to use different extensions each time transforms are
+generated.  To do this change HEOUTXFORMEXT in HTE.align to
+cmllr2. Comment out HVALIGN from HTE.align so that decoding is
+run. Generate new transforms and then decode.
+
+> herest.prl HTE.align hmm2 hmm2\cmllr2 hmm0\cmllr1
+> htestrm.prl HTE.align wp feb89 hmm2 hmm2\cmllr2
+
+Standard MLLR can then be built on top of this CMLLR transform. This
+is achieved by specifying the cmllr2 transforms as the parent
+transforms for generating the MLLR transform. Add the following lines
+to HTE.align
+
+set HEPAXFORMDIR    = hmm0\cmllr2
+set HEPAXFORMEXT    = cmllr2
+
+and change the xform config file to config.mllr. You will also need to 
+alter the transform extensions so that 
+
+set HEOUTXFORMEXT   = mllr1
+set HEINXFORMEXT    = cmllr2
+set HVINXFORMEXT    = mllr1
+
+The transforms can then be trained and used in decoding with
+
+> herest.prl HTE.align hmm2 hmm2\mllr1 hmm2\cmllr2
+> htestrm.prl HTE.align wp feb89 hmm2 hmm2\mllr1
+
+The configuring of the transformations is very general. It is possible to 
+vary the block-sizes, size of regression class tree, nature of the transforms 
+(CMLLR, MLLRMEAN, MLLRCOV - see config.cov). These may be combined into
+general combinations, for example cascade transforms. 
+
+11. Discriminative Training
+===========================
+The systems generated so far have been trained using maximum likelihood
+training.  Most state-of-the-art speech recognition systems are built
+using discriminative training schemes. HTK suppports both Maximum Mutual
+Information (MMI) and Minimum Phone Error (MPE) training.
+
+NOTE: As part of the training a heavily pruned bigram is used to gnerate 
+the  denominator lattices. This is currently pruned using cut-offs. 
+Perplexity pruning would be a better option.
+
+WARNING: This section requires the HDecode extension to HTK to be
+downloaded and compiled. In addition this section is very slow to 
+run as lattices must be created for all the training uttences. This
+section is primarily meant as an overview of how discriminative training
+could be run (all stages). It has not been extensively tuned for either
+speed or performance and is thus not appropriate to quote as a baseline
+for anything!
+
+11.1 Lattice Generation
+
+The first step is to generate lattices that have the start and end times 
+for each phone marked (this is for efficiency in training). This involves 
+the following stepes
+i) convert word-pair network into an N-gram language model
+ii) generate word-lattices
+iii) mark the start and end times for each phone in the word-lattices
+iv) generate new training scp file
+
+Note to illustrate the effects of discriminative training a single component 
+cross-word triphone system is used.
+
+> mkdir %RMWORK%\R11
+> cd %RMWORK%\R11
+> mkdir latgen
+> cd latgen
+> mkdir hmm0
+> copy %RMWORK%\R9\hmm4\MODELS hmm0
+
+Copy the HTE file associated with lattice generation and phone marking
+
+> copy %RMLIB%\htefiles\HTE.latgen .
+> cd %RMWORK%\R11\latgen
+> mkdir %RMWORK%\R11\latgen\lattices
+
+Copy %RMLIB%\mswin\lib into %RMWORK%\R11\latgen\lattices\
+
+All 4 steps can then be run using
+
+> latgen.prl HTE.latgen hmm0 lattices
+
+
+11.2 MPE Model Training
+
+Having generated the training lattices dsicriminative training can now be run.
+The default script uses MPE training, though an MMI config file is also supplied.
+Create directories and copy the HTE file 
+
+> cd %RMWORK%\R11
+> mkdir mpe
+> cd mpe
+> mkdir hmm0
+> cd hmm0
+> copy %RMWORK%\R11\latgen\hmm0\MODELS .
+> cd ..
+> copy directory ..\latgen\lattices\lattices to lattices
+> copy %RMLIB%\htefiles\HTE.mpe HTE
+
+Now perform 2 iterations of MPE training
+
+> hbuild.prl 1 2
+> hbuild.prl 3 4
+
+And then test the ML and MPE models
+
+> htestrm.prl HTE wp feb89 hmm0
+> htestrm.prl HTE wp feb89 hmm1
+> htestrm.prl HTE wp feb89 hmm2
+> htestrm.prl HTE wp feb89 hmm3
+> htestrm.prl HTE wp feb89 hmm4
+
+12. Linear transformation estimation
+==================================== 
+
+This section uses two semi-tied transforms to reduce the impact of the
+diagonal coavariance matrix approximation and the use of HLDA (global)
+to reduce the dimensionality as well. For simple tasks such as RM the
+gains from using these linear transform is small. Howevere significant
+gains have been obtained on more complexand harder tasks (best to play
+with you specific task ...)
+
+WARNING: Estimating the semi-tied and HLDA transforms requires the
+accumulation of full-covariance matrix statistics. In contrast to the
+previous sections this will increase the memory requirements by
+approximately a factor of 5.
+
+ > mkdir %RMWORK%\R12
+ > cd %RMWORK%\R12
+ > mkdir hmm0
+ > copy %RMWORK%\R9\hmm4\MODELS hmm0
+ > copy %RMWORK%\R9\hmm54\regtree_2.* hmm0
+
+12.1 Estimating semi-tied transforms
+
+Semi-tied transforms are stored in the same fashion as adaptation transforms.
+Copy the HTE file associated with semi-tied training.
+
+ > copy %RMLIB%\htefiles\HTE.semit .
+
+Estimate the semi-tied transform
+
+>  herest.prl HTE.semit hmm0 hmm1 
+
+Then do a further iteration of ML training. This can be simply done
+by commenting out the line associated with "HEUPD=stw". Then run
+
+>  herest.prl HTE.semit hmm1 hmm2
+
+Finally evaluate the performance
+
+ > htestrm.prl HTE.semit wp feb89 hmm2
+
+12.2 Estimating HLDA transforms
+Global HLDA transforms are efficiently stored as input transforms.
+Copy the HTE file associated with HLDA training.
+
+ > copy %RMLIB%\htefiles\HTE.hlda .
+
+Create a global base class in hmm0\global containing
+
+  ~b "global"
+  <MMFIDMASK> * 
+  <PARAMETERS> MIXBASE
+  <NUMCLASSES> 1
+    <CLASS> 1  {*.state[2-4].mix[1-100]}      
+
+Estimate the HLDA transform
+
+>  herest.prl HTE.hlda hmm0 hmm1_hlda
+
+In this case, as a global transform is being used, the transform is stored as
+an InputXForm (specified using SEMITIED2INPUTXFORM=TRUE). This transform is then
+stored in the MODEL file and automatically applied.
+
+Then do a further iteration of ML training. 
+
+>  herest.prl HTE hmm1_hlda hmm2_hlda
+
+Finally evaluate the performance
+
+ > htestrm.prl HTE wp feb89 hmm2_hlda
+
+13. Multiple Stream Systems
+===========================
+
+As an example of the flexibility of HTK, tis section describes how multiple
+stream systems can be built (it also is used as a regression test for internal
+HTK development).
+
+ > mkdir %RMWORK%\R13
+ > cd %RMWORK%\R13
+ > copy %RMWORK%\R9\HTE .
+ > mkdir hmm0
+ > echo  SS 3 > edfile.ss.hed
+ > HHEd -A -D -V -T 1 -B -H %RMWORK%\R9\hmm54\MODELS -w hmm0\MODELS edfile.ss.hed \
+     %RMLIB%\mlists\treeg.list > hmm0\LOG
+ > hbuild.prl 1 4
+ > htestrm.prl HTE wp feb89 hmm4
+
+Conclusions
+===========
+
+This has given some basic ideas for how to generate RM systems.
+These results can definitely be improved upon - things to try
+include.
+i)   Cepstral means normalisation (just set TARGETKIND = MFCC_D_A_E_Z)
+ii)  Improved model architectures (particularly silence and stops)
+iii) Multiple pronunciations
+iv)  Further smoothing/tying, particularly tied-mixture systems - try HSmooth
+  .... the sky's the limit with HTK
+
+
+Appendix. Recognition Results
+=============================
+
+Recognition results based on models created at various stages of
+training are presented here.  The scores are generated by HResults and
+are appended to the test LOG files by htestrm.  The path names of the
+LOG files given here correspond to the naming convention used in the
+recipe.
+
+The SENT scores indicate correctness and accuracy at the sentence
+level, while the WORD scores indicate correctness and accuracy at the
+word level.  These scores should serve as a guideline for initial
+experiments with the RM Toolkit.
+Note that at low system complexities the results may be slightly
+worse the the HTK_V1.5 RM demo since function word dependent models
+are not used in this system.  However the improved capabilities of 
+HTK_V2.0 (particularly cross-word triphones) lead to better
+performance in the end.
+
+
+Single Mixture Monophone Models
+  Rec : R1/hmm4/test_wp_feb89.1/wp_feb89.mlf
+------------------------ Overall Results --------------------------
+SENT: %Correct=29.67 [H=89, S=211, N=300]
+WORD: %Corr=77.94, Acc=75.56 [H=1996, D=146, S=419, I=61, N=2561]
+===================================================================
+
+Two-Mixture Monophone Models
+  Rec : R2/hmm14/test_wp_feb89.1/wp_feb89.mlf
+------------------------ Overall Results --------------------------
+SENT: %Correct=40.33 [H=121, S=179, N=300]
+WORD: %Corr=84.15, Acc=82.74 [H=2155, D=139, S=267, I=36, N=2561]
+===================================================================
+
+Tied-Mixture Monophone Models
+  Rec : R3/hmm4/test_wp_feb89.1/wp_feb89.mlf
+------------------------ Overall Results --------------------------
+SENT: %Correct=41.33 [H=124, S=176, N=300]
+WORD: %Corr=86.06, Acc=84.19 [H=2204, D=72, S=285, I=48, N=2561]
+===================================================================
+
+Discrete-density Monophone Models
+  Rec : hmm7\test_wp_feb89.1\wp_feb89.mlf
+------------------------ Overall Results --------------------------
+SENT: %Correct=42.33 [H=127, S=173, N=300]
+WORD: %Corr=86.45, Acc=83.99 [H=2214, D=56, S=291, I=63, N=2561]
+===================================================================
+
+Single Mixture, Word-Internal Triphones
+  Rec : R5/hmm2/test_wp_feb89.1/wp_feb89.mlf
+------------------------ Overall Results --------------------------
+SENT: %Correct=52.17 [H=156, S=143, N=299]
+WORD: %Corr=89.60, Acc=87.49 [H=2292, D=104, S=162, I=54, N=2558]
+===================================================================
+
+Tied-mixture, Word-Internal Triphone Models
+  Rec : hmm2\test_wp_feb89.1\wp_feb89.mlf
+------------------------ Overall Results --------------------------
+SENT: %Correct=49.67 [H=149, S=151, N=300]
+WORD: %Corr=89.34, Acc=89.03 [H=2288, D=104, S=169, I=8, N=2561]
+===================================================================
+
+Tied-mixture, Smoothed Word-Internal Triphone Models
+  Rec : hmm3\test_wp_feb89.1\wp_feb89.mlf
+------------------------ Overall Results --------------------------
+SENT: %Correct=51.67 [H=155, S=145, N=300]
+WORD: %Corr=90.36, Acc=90.16 [H=2314, D=93, S=154, I=5, N=2561]
+===================================================================
+
+Single Mixture, Word-Internal, State-Clustered Triphones
+  Rec : hmm4\test_wp_feb89.1\wp_feb89.mlf
+------------------------ Overall Results --------------------------
+SENT: %Correct=57.86 [H=173, S=126, N=299]
+WORD: %Corr=90.85, Acc=90.15 [H=2324, D=106, S=128, I=18, N=2558]
+===================================================================
+
+Six-Mixture, Word-Internal, State-Clustered Triphones
+  Rec : R8/hmm54/test_wp_feb89.1/wp_feb89.mlf
+------------------------ Overall Results --------------------------
+SENT: %Correct=74.00 [H=222, S=78, N=300]
+WORD: %Corr=96.02, Acc=95.70 [H=2459, D=39, S=63, I=8, N=2561]
+===================================================================
+
+Single Mixture, Cross-Word, Tree-Clustered Triphones
+  Rec : hmm4/test_wp_feb89.1/wp_feb89.mlf
+------------------------ Overall Results --------------------------
+SENT: %Correct=66.00 [H=198, S=102, N=300]
+WORD: %Corr=94.61, Acc=93.13 [H=2423, D=32, S=106, I=38, N=2561]
+===================================================================
+
+Six-Mixture, Cross-Word, Tree-Clustered Triphones
+  Rec : hmm54\test_wp_feb89.1\wp_feb89.mlf
+------------------------ Overall Results --------------------------
+SENT: %Correct=83.33 [H=250, S=50, N=300]
+WORD: %Corr=97.42, Acc=97.15 [H=2495, D=14, S=52, I=7, N=2561]
+===================================================================
+
+MLLR Incremental Adaptation
+  Rec : R9/hmm54/test_wp_feb89.2/wp_feb89.mlf
+------------------------ Overall Results --------------------------
+SENT: %Correct=83.67 [H=251, S=49, N=300]
+WORD: %Corr=97.66, Acc=97.42 [H=2501, D=13, S=47, I=6, N=2561]
+===================================================================
+
+MLLR Batch Adaptation
+  Rec : R9/hmm54/test_wp_feb89.3/wp_feb89.mlf
+------------------------ Overall Results --------------------------
+SENT: %Correct=84.67 [H=254, S=46, N=300]
+WORD: %Corr=97.85, Acc=97.62 [H=2506, D=13, S=42, I=6, N=2561]
+===================================================================
+
+Speaker Adaptive Training, Constrained MLLR transform
+  Rec : R10/hmm2/test_wp_feb89.1/wp_feb89.mlf
+------------------------ Overall Results --------------------------
+SENT: %Correct=86.67 [H=260, S=40, N=300]
+WORD: %Corr=98.28, Acc=98.05 [H=2517, D=10, S=34, I=6, N=2561]
+===================================================================
+
+Constrained MLLR + MLLR transform
+  Rec : R10/hmm2/test_wp_feb89.2/wp_feb89.mlf
+------------------------ Overall Results --------------------------
+SENT: %Correct=87.67 [H=263, S=37, N=300]
+WORD: %Corr=98.28, Acc=98.16 [H=2517, D=10, S=34, I=3, N=2561]
+===================================================================
+
+MPE: iteration 0 (ML)
+  Rec : R11/hmm0/test_wp_feb89.1/wp_feb89.mlf
+------------------------ Overall Results --------------------------
+SENT: %Correct=71.00 [H=213, S=87, N=300]
+WORD: %Corr=95.55, Acc=94.69 [H=2447, D=28, S=86, I=22, N=2561]
+===================================================================
+
+MPE: iteration 1
+  Rec : R11/hmm1/test_wp_feb89.1/wp_feb89.mlf
+------------------------ Overall Results --------------------------
+SENT: %Correct=77.67 [H=233, S=67, N=300]
+WORD: %Corr=96.56, Acc=96.10 [H=2473, D=29, S=59, I=12, N=2561]
+===================================================================
+
+MPE: iteration 2
+  Rec : R11/hmm2/test_wp_feb89.1/wp_feb89.mlf
+------------------------ Overall Results --------------------------
+SENT: %Correct=76.00 [H=228, S=72, N=300]
+WORD: %Corr=96.52, Acc=96.06 [H=2472, D=29, S=60, I=12, N=2561]
+===================================================================
+
+Semi-Tied
+  Rec : R12/hmm4/test_wp_feb89.1/wp_feb89.mlf
+------------------------ Overall Results --------------------------
+SENT: %Correct=70.00 [H=210, S=90, N=300]
+WORD: %Corr=94.69, Acc=93.75 [H=2425, D=47, S=89, I=24, N=2561]
+===================================================================
+
+HLDA
+  Rec : R12/hmm4_hlda/test_wp_feb89.1/wp_feb89.mlf
+------------------------ Overall Results --------------------------
+SENT: %Correct=69.00 [H=207, S=93, N=300]
+WORD: %Corr=94.81, Acc=94.22 [H=2428, D=46, S=87, I=15, N=2561]
+===================================================================
+
+Multiple Stream
+  Rec : R13/hmm4/test_wp_feb89.1/wp_feb89.mlf
+------------------------ Overall Results --------------------------
+SENT: %Correct=80.00 [H=240, S=60, N=300]
+WORD: %Corr=97.19, Acc=96.84 [H=2489, D=16, S=56, I=9, N=2561]
+===================================================================
+

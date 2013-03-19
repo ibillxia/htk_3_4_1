@@ -1,0 +1,26 @@
+VERSION=1.0
+N=8    L=16   
+I=0    W=S                   
+I=1    W=!NULL               
+I=2    W=N                   
+I=3    W=L                   
+I=4    W=C                   
+I=5    W=V                   
+I=6    W=!NULL               
+I=7    W=!NULL               
+J=0     S=1    E=0    
+J=1     S=7    E=0    
+J=2     S=0    E=1    
+J=3     S=2    E=1    
+J=4     S=3    E=1    
+J=5     S=4    E=1    
+J=6     S=5    E=1    
+J=7     S=1    E=2    
+J=8     S=7    E=2    
+J=9     S=1    E=3    
+J=10    S=7    E=3    
+J=11    S=1    E=4    
+J=12    S=7    E=4    
+J=13    S=1    E=5    
+J=14    S=7    E=5    
+J=15    S=1    E=6    

@@ -1,0 +1,6 @@
+TARGETKIND     		= MFCC_E_D_A    #   Basic parameterisation
+
+RAWMITFORMAT   = T
+
+STARTWORD      		= !SENT_START
+ENDWORD        		= !SENT_END

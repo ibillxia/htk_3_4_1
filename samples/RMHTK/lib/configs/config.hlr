@@ -1,0 +1,16 @@
+FIXBADLATS       = T
+
+HLANGMODFILTER   = 'gunzip -cd $.gz'
+HNETOFILTER      = 'gzip -c > $.gz'
+HNETFILTER       = '/usr/local/bin/gunzip -c $.gz'
+
+HLM:RAWMITFORMAT = T
+HLM:TRACE        = 1
+
+HLAT: TRACE       = 1
+# HLAT:TRACE       = 27
+# HLAT:TRACE       = 155
+
+STARTWORD               = !SENT_START
+ENDWORD                 = !SENT_END
+

@@ -1,0 +1,69 @@
+#---------------------------------------------------------------#
+# HTK RM Environment File                                       #
+#                                                               #
+#---------------------------------------------------------------#
+
+# Set priority at which processes are run
+set NICE = 5
+
+# Define the rmwork and rmdata areas
+set rmwork=$RMWORK
+set rmdata=$RMDATA
+set rmlib=$RMLIB
+
+# define input filters
+setenv HNETFILTER 'gzip -d -c $.gz'          # Networks compress well
+
+# Define input configuration files
+setenv HECONFIG $rmlib/configs/config.basic  # Basic configuration
+setenv HVCONFIG $rmlib/configs/config.xwrd  # Basic configuration
+setenv HEXFORMCONFIG $rmlib/configs/config.semit
+
+# Define HMMs - should reflect current models set
+set HMMLIST=$rmlib/mlists/treeg.list # ****** #
+
+# Define Training Data and Label files for current models
+set TRAINDATALIST=$rmlib/flists/ind_trn109.scp
+set TRAINMLF=$rmlib/labs/xwrd.mlf   # ****** #
+
+# Define Test Data 
+# Note that TESTSET is defined by htestrm before sourcing HTE
+set SETLIST=(feb89 oct89 feb91 sep92)
+if ($?TESTSET) then
+   set TESTDATALIST=$rmlib/flists/ind_${TESTSET}.scp
+   set TESTMLF=$rmlib/wlabs/ind_tst.mlf
+endif
+
+# HERest Program Options
+set HETRACE=1
+set HEMINWEIGHT=2.0
+set HETMTHRESH=20.0    # Only needs to be same order as numerical accuracy
+# 250==VERY TIGHT, 500==TIGHT, 1000==LOOSE #
+set HEPRUNE= (250.0 250.0 1000.1) 
+set HESTATS=stats      # stats files aren't always needed but are interesting #
+set HEMINEG=0          # Potentially bad choice for unclustered models 
+set HEUPD=stw
+
+# Define possible test conditions
+set TYPELIST=(ng wp)
+
+# HVite Network Defn & Program Options
+set HVTRACE=1
+set HVNET=($rmlib/nets/net.ng $rmlib/nets/net.wp)
+set HVVOC=($rmlib/dicts/mono.dct $rmlib/dicts/mono.dct)
+set HVPRUNE=(200.0 300.0)
+set HVMAXACTIVE=(0 0)
+set HVGSCALE=(7.0 7.0)
+set HVIMPROB=(0.0 0.0)
+
+set HEFORCEXFORMDIR = (hmm0 hmm1)
+set HVFORCEXFORMDIR = (hmm0 hmm1)
+
+# HResults Results Analysis
+set WORDLIST=$rmlib/wordlist
+set HREQSETS=($rmlib/eq.ng $rmlib/eq.wp)
+set HRNIST 
+
+#---------------------------------------------------------------#
+#                END OF ENVIRONMENT DEFINITION                  #
+#---------------------------------------------------------------#

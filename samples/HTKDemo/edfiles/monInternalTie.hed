@@ -1,0 +1,15 @@
+TI C1 {C.state[2-4].stream[1].mix[1].cov}
+TI C2 {C.state[2-4].stream[2].mix[1].cov}
+TI C3 {C.state[2-4].stream[3].mix[1].cov}
+TI L1 {L.state[2-4].stream[1].mix[1].cov}
+TI L2 {L.state[2-4].stream[2].mix[1].cov}
+TI L3 {L.state[2-4].stream[3].mix[1].cov}
+TI N1 {N.state[2-4].stream[1].mix[1].cov}
+TI N2 {N.state[2-4].stream[2].mix[1].cov}
+TI N3 {N.state[2-4].stream[3].mix[1].cov}
+TI S1 {S.state[2-4].stream[1].mix[1].cov}
+TI S2 {S.state[2-4].stream[2].mix[1].cov}
+TI S3 {S.state[2-4].stream[3].mix[1].cov}
+TI V1 {V.state[2-4].stream[1].mix[1].cov}
+TI V2 {V.state[2-4].stream[2].mix[1].cov}
+TI V3 {V.state[2-4].stream[3].mix[1].cov}

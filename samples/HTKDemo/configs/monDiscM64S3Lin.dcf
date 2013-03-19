@@ -1,0 +1,37 @@
+<BEGINtest_config_file>
+
+<COMMENT>
+   This DCF produces a 3 stream VQ HMM monophone system using a codebook of
+   sizes 64 64 16.
+
+<BEGINsys_setup>
+
+hsKind: D
+covKind: D
+nStreams: 3
+nMixes: 64 64 16
+Context: M
+TiedState: n
+VQ_clust: L
+HERest_Iter: 3
+HERest_par_mode: n
+Clean_up: y
+Trace_tool_calls: y
+
+<ENDsys_setup>:
+
+<BEGINtool_steps>
+
+HCopy: n
+HList: n
+HQuant: y
+HLEd: n
+HInit: y
+HRest: y
+HERest: y
+HSmooth: n
+HVite: y
+
+<ENDtool_steps>:
+
+<ENDtest_config_file>:

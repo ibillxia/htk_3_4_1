@@ -1,0 +1,118 @@
+#!/usr/local/bin/perl
+
+#
+# This script will copy the speaker independent file lists from 
+# RMCD2 to ndx directory.
+#
+# TL 7/1998
+#
+
+push @INC, "$ENV{RMSCRIPTS}";
+require "global.pl";
+
+$ndx_dir = "$RMLIB".'\\ndx';
+if (!-d $ndx_dir) {
+	mkdir $ndx_dir, 0755;
+}
+
+chdir ($ndx_dir);
+
+@types = ("*_*.ndx");
+
+$count=0;
+foreach $type (@types) {
+	$cmdstr = "$RMCD2\\rm1\\doc\\$type";
+	system("dir /S /B $cmdstr > junk");
+	open(JUNK, "<junk");
+	while (<JUNK>) {        
+		chop;
+		if ( -f $_ ) {
+			system("copy $_ $ndx_dir\\.");
+			$count++;
+		}
+		else {
+			print "not a file $_.\n";
+		}
+	}
+}
+close (JUNK);
+unlink junk;
+if ( $count > 0 ) {
+	print "$count files have been copied\n";
+}
+else {
+	print "Error: No file was found\n";
+}
+
+
+#We need to strip the adaptation data so there is only one speaker (dms0)
+
+print("\nModifying training data for one speaker (dms0)\n");
+chdir ($ndx_dir);
+
+system("dir /B *dep* > junk");
+
+open(JUNK, "<junk");
+while (<JUNK>) {        
+	chop;
+	if ( -f $_ ) {
+		$outfile = "$_.tmp";
+		unless (open (OUTFILE, ">$outfile")) {
+			die ("cannot open dir $ndx_dir for writing");
+		}
+		open (INFILE, $_);
+		$filename = $_;
+		$filename =~ tr/A-Z/a-z/;
+		$count = 0;
+		$line = <INFILE>;
+		while ( $line ne "" && $count <100){
+			if ( $line =~ /dms0/ ) {
+				print OUTFILE ($line);
+				#we do not need all 600 sentences for adaptation training.	
+				if ( $filename =~ /6a_deptr/ ) {
+					$count++;
+				}
+			}
+			$line = <INFILE>;
+		}
+		close(OUTFILE);
+	}
+	else {
+		print "not a file $_.\n";
+	}
+}
+close (JUNK);
+
+open(JUNK, "<junk");
+while (<JUNK>) {        
+	chop;
+	system("copy $_.tmp $_");
+}
+close (JUNK);
+
+open(JUNK, "<junk");
+while (<JUNK>) {        
+	chop;
+chdir ($ndx_dir);
+	$file = "$_.tmp";
+	unlink("$_.tmp");
+}
+close (JUNK);
+
+# put all speaker dep test files into a single file.
+
+system("dir /B *deptst* > junk");
+open(JUNK, "<junk");
+while (<JUNK>) {        
+	chop;
+print ("$_\n");
+	if ( $_ =~ /TST/ ) {
+		system ("type $_ >> dms0_tst.ndx");
+	}
+}
+close (JUNK);
+
+unlink junk;
+
+
+print("Adaptation scripts modified\n");

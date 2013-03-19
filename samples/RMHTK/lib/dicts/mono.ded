@@ -1,0 +1,51 @@
+# command file for editing SRI Resource Management dictionary
+# make a dictionary that is similar to the CMU phone set
+UW
+
+# delete glottal stops
+DP q
+
+# consonant transformations
+MP ts tcl t s
+MP d dcl d
+RP dd dcl
+MP k kcl k
+RP kd kcl
+MP p pcl p
+RP pd pcl
+MP t tcl t
+RP td tcl
+MP b bcl b
+RP b bcl
+MP g gcl g
+RP g gcl
+RP hh hv
+
+# nasals
+RP ng eng
+
+# merge in stressed vowels
+RP aa aa+1
+RP ae ae+1
+RP ah ah+1
+RP ao ao+1
+RP aw aw+1
+RP ay ay+1
+RP eh eh+1
+RP er er+1
+RP er axr
+RP ey ey+1
+RP ih ih+1
+RP iy iy+1
+RP ow ow+1
+RP oy oy+1
+RP uw uw+1
+RP uh uh+1
+
+# fix up a few other things
+RP sh zh
+RP m em
+
+# Add silence to words (but not !SENT_????)
+AS sp
+MP sil sil sp

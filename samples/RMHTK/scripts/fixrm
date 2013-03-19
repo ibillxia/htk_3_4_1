@@ -1,0 +1,67 @@
+#!/bin/csh -f
+
+#  fix rm files that were corrupted in recording
+#  chops out a number of samples from the (coded) files
+#   
+#  fixrm corruptlist dataroot
+#
+#  where corruptlist is a file with each list containing the
+#      corrupt_file_name corrupt_start corrupt_end
+# dataroot is the root directory for the files in corruptlist
+#
+# the script moves the original file to the same name with 
+# .orig added to the name
+#
+# Copyright (c) Phil Woodland, 1993
+# Last Updated 14/5/93
+#
+
+if ( $#argv != 2 ) then
+   echo "usage: fixrm corruptlist dataroot"
+   exit 1
+endif
+
+set CORRUPT=$1
+if (! -f $CORRUPT) then
+   echo "fixrm: corrupt list $CORRUPT not found"
+   exit 1
+endif
+
+set DATAROOT=$2
+if (! -d $DATAROOT) then
+   echo "fixrm: Invalid dataroot directory $DATAROOT"
+   exit 1
+endif
+
+set corruptlist=`cat $CORRUPT`
+@ ncorrupt = $#corruptlist / 3
+echo "$ncorrupt files read"
+set index=1
+@ i = 1
+while ( $i <= $ncorrupt )
+   set name = $corruptlist[$index]
+   @ index++
+   set first = $corruptlist[$index]
+   @ index++
+   set last = $corruptlist[$index]
+   @ index++
+   set fullname = $DATAROOT/$name
+   set backup = "$fullname".orig
+   if ( -f $backup ) then
+      echo "$fullname already processed"
+   else
+      echo "Deleting frames $first to $last of $fullname"
+      cp $fullname $backup
+      set dir = `dirname $fullname`
+      @ startend = ( $first - 1 ) 
+      @ startend = $startend * 100000
+      HCopy -A -e $startend $fullname $dir/tmp.1
+      @ endstart = $last + 1
+      @ endstart = $endstart * 100000
+      HCopy -A -s $endstart $fullname $dir/tmp.2
+      HCopy -A $dir/tmp.1 + $dir/tmp.2 $fullname
+      \rm $dir/tmp.1 $dir/tmp.2
+   endif
+   @ i++
+end   
+   

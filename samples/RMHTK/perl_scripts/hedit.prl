@@ -1,0 +1,86 @@
+#!/usr/local/bin/perl
+
+# This shell script invokes HHEd to perform a global edit of a set
+# of models.  It must be executed from within the directory holding
+# the hmm directories.
+#
+# Usage:   hedit.prl env m n
+#
+# where m is the index of the source directory and n is the index
+# of the target directory.  hedit assumes the existence of an edit file
+# in the current directory
+#
+#    edfilem.n - containing the required edit commands
+#
+# Example
+#
+#    cd R3; hedit.prl env 14 21
+#
+# Edit the models  stored in hmm14 and store the new models in 
+# an MMF in hmm21 using the edit commands stored in edfile14.21
+#
+# Copyright (c) Steve Young 1992, 1993
+# Last Updated 19/10/93
+#
+# Converted to Perl script by TL 7/1998
+#
+
+push @INC, "$ENV{RMSCRIPTS}";   # include the perl script path
+require "global.pl";                    # include global variables
+require "env_conv.pm";                  # sub to convert env vars
+
+# Check Number of Args
+if ( $#ARGV != 2 ) {
+	die "Usage: hedit.prl env m n\n";
+}
+
+# Read the environment file
+$Env_file = $ARGV[0];
+if ( ! -f $Env_file ) {
+	die "htestrm: cannot find environment file $Env_file\n";
+}
+# convert environment file to perl format
+$Perl_env = "HE_env.pl";
+&env_conv::env_convert($Env_file,$Perl_env);
+
+# read in variable value from new file in perl format
+require "$Perl_env";
+
+$from = $ARGV[1];
+$to = $ARGV[2];
+$hmm_from = "hmm$from";
+$hmm_to = "hmm$to";
+if ( -d "$hmm_from" ) {
+   $src = "-H $hmm_from\\MODELS ";
+}
+else {
+   die "No source dir $hmm_from\n";
+}
+
+$tgt = "-M $hmm_to ";
+
+if ( ! -d $hmm_to ) {
+	mkdir $hmm_to, 0755;
+}
+
+if ( ! -f $HMMLIST ) {
+   die "List of models to edit $HMMLIST does not exist\n";
+}
+
+$edit_file = "edfile$from.$to";
+if ( ! -f $edit_file ) {
+   die "Edit command file $edit_file does not exist\n";
+}
+
+if (defined $HHTRACE) {
+   $OPT = "-T $HHTRACE ";
+}
+else {
+   $OPT = "-T 1 ";
+}
+
+# remove perl environment variable file
+unlink $Perl_env;
+
+system("HHEd -A -C $HECONFIG $OPT $src $tgt  $edit_file $HMMLIST");
+

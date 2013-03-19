@@ -1,0 +1,14 @@
+
+ HADAPT:TRACE                  = 61 
+
+ HADAPT:TRANSKIND              = CMLLR
+ HADAPT:USEBIAS                = TRUE
+ HADAPT:REGTREE                = regtree_2.tree
+ HADAPT:ADAPTKIND              = TREE
+ HADAPT:SPLITTHRESH            = 1000.0
+ HADAPT:BLOCKSIZE              = "IntVec 3 13 13 13"
+ 
+ HMODEL:SAVEBINARY             = FALSE
+ HMODEL:TRACE                  = 512
+
+

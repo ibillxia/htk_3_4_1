@@ -1,0 +1,38 @@
+#!/bin/csh
+
+#  generate an HHEd script file for state-clustering triphones
+#   
+#  mkclscript command threshold monophone_list
+#
+#  where monophone_list is a HMM list for the phones (not triphones) 
+#        to be clustered
+#
+# Script generates a specified command and threhold for a cluster
+# corresponding to each states of each phone. 
+# The script assumes each model has 3 emitting states.
+#
+# Copyright (c) Phil Woodland, 1993
+# Last Updated 5/9/95
+#
+
+if ( $#argv != 3 ) then
+   echo "usage: mkclscript command threshold monophone_list"
+   exit 1
+endif
+
+set HMMLIST=$3
+if (! -f $HMMLIST) then
+   echo "mkclscript: monophone HMM list $HMMLIST not found"
+   exit 1
+endif
+
+set monophones=`cat $HMMLIST`
+foreach i ($monophones)
+  echo $1 $2 '"ST_'"$i"_2_'"' '{("'"$i"'","*-'"$i"'+*","'"$i"'+*","*-'"$i"'").state[2]}'
+end
+foreach i ($monophones)
+  echo $1 $2 '"ST_'"$i"_3_'"' '{("'"$i"'","*-'"$i"'+*","'"$i"'+*","*-'"$i"'").state[3]}'
+end
+foreach i ($monophones)
+  echo $1 $2 '"ST_'"$i"_4_'"' '{("'"$i"'","*-'"$i"'+*","'"$i"'+*","*-'"$i"'").state[4]}'
+end

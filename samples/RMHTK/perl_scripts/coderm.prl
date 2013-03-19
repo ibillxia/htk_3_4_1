@@ -1,0 +1,181 @@
+#!/usr/local/bin/perl
+
+# This script will encode a given list of files of the RM database
+# store the results in a directory tree given the root
+# It has options for coding training data and test data for both
+# the speaker dependent and speaker independent training sets
+#
+# usage: coderm.prl ndxdir cdmount dbtype dbportion targetroot config codelist
+#
+#  ndxdir       - directory to find the NIST filelists
+#  cdmount      - where CD-ROM with both data files is mounted
+#  dbtype       - ind | dep
+#  dbportion    - train | dev_aug | traina | trainb | evalset | dms0_tst
+#  targetroot   - root directory for coded files
+#  config       - configuration file used to set coding parameters
+#  codelist     - list of coded files
+#
+#  for speaker dependent - dbportion = traina (1st 6 speakers)
+#                                    = trainb (2nd 6 speakers)
+#  for speaker independent - dbportion = train (main 72 speakers)
+#                          - dbportion = dev_aug (augmented 37 speakers)
+#  In both cases evalset is one of {feb89, oct89, feb91, sep92}
+#
+# eg coderm.prl $RMLIB/ndx $CDRM1 ind train /home/azure/pcw/rmdata
+#
+# The script first identifies the appropriate filelist from ndxdir
+# and then codes all the files listed transforming the filenames 
+# so that they are unique e.g  bef0_3/st0013.wav -> bef0_3_st0013.mfc
+#
+# Copyright (c) Phil Woodland + Julian Odell, 1995
+# Last Updated 17/8/95
+#
+# convert to perl by TL 7/1998
+#
+push @INC, "$ENV{RMSCRIPTS}";
+require "global.pl";                    # include global variables
+
+if ( $#ARGV != 6 ) {
+	die "usage: coderm.prl ndxdir cdmount dbtype dbportion targetroot config codelist.\n";
+}
+
+$ndxdir = $ARGV[0];
+if ( ! -d $ndxdir ) {
+   die "NIST filelist directory $ndxdir not found.\n";
+}
+
+$rmcd = $ARGV[1];
+if ( ! -d $rmcd ) {
+   die "RM CD-ROM $rmcd not found.\n";
+}
+
+$dbtype = $ARGV[2];
+if ( $dbtype != ind && $dbtype != dep ) {
+   die "dbtype of [ind | dep] expected and not $dbtype.\n";
+}
+
+$dbportion = $ARGV[3];
+foreach ($dbportion) {
+	/traina/ and do { 
+		if ($dbtype == dep) {
+			$ndx = "$ndxdir\\6a_deptr.ndx";
+		}
+		else {
+			die "Illegal dbportion $dbportion for dbtype $dbtype.\n";
+		}
+		last;
+	}; 
+	/trainb/ and do { 
+		if ($dbtype == dep) {
+			$ndx = "$ndxdir\\6b_deptr.ndx";
+		}
+		else {
+			die "Illegal dbportion $dbportion for dbtype $dbtype.\n";
+		}
+		last;
+	}; 
+	/train/ and do { 
+		if ($dbtype == ind) {
+			$ndx = "$ndxdir\\72_indtr.ndx";
+		}
+		else {
+			die "Illegal dbportion $dbportion for dbtype $dbtype.\n";
+		}
+		last;
+	}; 
+	/dev_aug/ and do {
+		if ($dbtype == ind) {
+			$ndx = "$ndxdir\\37_indtr.ndx";
+		}
+		else {
+			die "Illegal dbportion $dbportion for dbtype $dbtype.\n";
+		}
+		last;
+	}; 
+	/feb89/ and do {
+		$ndx = "$ndxdir\\4_${dbtype}tst.ndx";
+		last;
+	};
+	/oct89/ and do {
+		$ndx = "$ndxdir\\5_${dbtype}tst.ndx";
+		last;
+	};
+	/feb91/ and do {
+		$ndx = "$ndxdir\\6_${dbtype}tst.ndx";
+		last;
+	};
+	/sep92/ and do {
+		$ndx = "$ndxdir\\7_${dbtype}tst.ndx";
+		last;
+	};
+	/dms0_tst/ and do {
+		$ndx = "$ndxdir\\dms0_tst.ndx";
+		last;
+	};
+   die "dbtype not one of (train | dev_aug | traina | trainb | feb89 | oct89 | feb91 | sep92 | dms0_tst).\n";
+}
+
+$tgtroot = $ARGV[4];
+if ( ! -d $tgtroot ) {
+   die "Target root directory $tgtroot doesnt exist.\n";
+}
+
+$config = $ARGV[5];
+$codefilelist = $ARGV[6];
+
+if ( ! -r $ndx ) {
+    die "Cant read RM filelist $ndx.\n";
+}
+
+$codescript = "${codefilelist}.code";
+
+unlink $codefilelist;
+unlink $codescript;
+
+print "Making file lists\n";
+$count = 0;
+open(NDXFILE,"<$ndx") or die "Can't open file $ndx\n";
+open(CODESCRIPT,">$codescript") or die "Can't open file $codescript\n";
+open(CODEFILELIST,">$codefilelist") or die "Can't open file $codefilelist\n";
+while (<NDXFILE>) {
+	if (/^;/) {
+		next;
+	}
+	s:^/(.*)/(.*)([/_])(.*)/(.*)/(.*)\.wav:$rmcd\\$1\\$2$3$4\\$5\\$6.wav $tgtroot\\$2_$4\\$5\\$5_$6.mfc:;
+	printf CODESCRIPT;
+	printf CODEFILELIST "$tgtroot\\$2_$4\\$5\\$5_$6.mfc\n";
+	$dirname = "$tgtroot\\$2_$4\\$5";
+	$newdir = 1;
+	foreach $dirlist (@dirlists) {
+		if ( $dirlist eq $dirname ) {
+			$newdir = 0;
+			last;
+		}
+	}
+       
+	if ( $newdir == 1 ) {
+		@dirlists = ( @dirlists, $dirname );
+	}
+	$count++;
+}
+close(NDXFILE);
+close(CODESCRIPT);
+close(CODEFILELIST);
+@coredirs = ("dep_eval", "dep_trn", "dev_aug", "ind_eval", "ind_trn");
+foreach $coredir (@coredirs) {  
+  if ( ! -d "$RMDATA\\$coredir" ) {
+	system("mkdir $RMDATA\\$coredir");
+  }
+}
+
+foreach $dirlist (@dirlists) {
+	if ( ! -d $dirlist ) {
+		system("mkdir $dirlist");
+	}
+}
+
+print "Coding data\n";
+system("HCopy -A -T 1 -C $config -S $codescript");
+unlink $codescript;
+
+print "Coding complete - $count files processed\n";

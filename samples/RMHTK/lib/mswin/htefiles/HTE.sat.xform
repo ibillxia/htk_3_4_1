@@ -1,0 +1,83 @@
+#---------------------------------------------------------------#
+# HTK RM Environment File                08/09/95               #
+#                                                               #
+# This version is for:                                          #
+#                                                               #
+#         Baseline - Monophones                                 #
+#         39th Order MFCC_E_D_A Data (data in MFCC_E format)    #
+#         1 Mixture/Diagonal/3 State no Skip + sp model         #
+#                                                               #
+#---------------------------------------------------------------#
+
+# Set priority at which processes are run
+set NICE = 5
+
+# Define the rmwork and rmdata areas
+set rmwork=$RMWORK
+set rmdata=$RMDATA
+set rmlib=$RMLIB
+
+# define input filters
+setenv HNETFILTER 'gzip -d -c $.gz'          # Networks compress well
+
+# Define input configuration files
+setenv HECONFIG $rmlib/configs/config.basic  # Basic configuration
+setenv HVCONFIG $rmlib/configs/config.xwrd  # Basic configuration
+setenv HEXFORMCONFIG $rmlib/configs/config.cmllr
+
+# Define HMMs - should reflect current models set
+set HMMLIST=$rmlib/mlists/treeg.list # ****** #
+
+# Define Training Data and Label files for current models
+set TRAINDATALIST=$rmlib/flists/ind_trn109.scp
+set TRAINMLF=$rmlib/labs/xwrd.mlf   # ****** #
+
+# Define Test Data 
+# Note that TESTSET is defined by htestrm before sourcing HTE
+set SETLIST=(feb89 oct89 feb91 sep92)
+if ($?TESTSET) then
+   set TESTDATALIST=$rmlib/flists/ind_${TESTSET}.scp
+   set TESTMLF=$rmlib/wlabs/ind_tst.mlf
+endif
+
+# HERest Program Options
+set HETRACE=1
+set HEMINWEIGHT=2.0
+set HETMTHRESH=20.0    # Only needs to be same order as numerical accuracy
+set HEPRUNE=250.0      # 250==VERY TIGHT, 500==TIGHT, 1000==LOOSE #
+set HESTATS=stats      # stats files aren't always needed but are interesting #
+set HEMINEG=0          # Potentially bad choice for unclustered models 
+set HEUPD=a
+
+# Define possible test conditions
+set TYPELIST=(ng wp)
+
+# HVite Network Defn & Program Options
+set HVTRACE=1
+set HVNET=($rmlib/nets/net.ng $rmlib/nets/net.wp)
+set HVVOC=($rmlib/dicts/mono.dct $rmlib/dicts/mono.dct)
+set HVPRUNE=(200.0 300.0)
+set HVMAXACTIVE=(0 0)
+set HVGSCALE=(7.0 7.0)
+set HVIMPROB=(0.0 0.0)
+
+# HERest adaptation options
+set HESPKRMASK      = '*/%%%%%%_*.mfc'
+set HESPKRMASK_WIN  = *\%\%\%\%\%\%_*.mfc
+set HEOUTXFORMEXT   = cmllr
+set HEFORCEXFORMDIR = (hmm0)
+
+# HVite adaptation options
+set HVSPKRMASK      = '*/%%%%%%_*.mfc'
+set HVSPKRMASK_WIN  =*\%\%\%\%\%\%_*.mfc
+set HVINXFORMEXT    = cmllr
+set HVFORCEXFORMDIR = (hmm0)
+
+# HResults Results Analysis
+set WORDLIST=$rmlib/wordlist
+set HREQSETS=($rmlib/eq.ng $rmlib/eq.wp)
+set HRNIST 
+
+#---------------------------------------------------------------#
+#                END OF ENVIRONMENT DEFINITION                  #
+#---------------------------------------------------------------#

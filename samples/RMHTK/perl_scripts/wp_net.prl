@@ -1,0 +1,85 @@
+#!/usr/local/bin/perl
+
+# This script will generate  word level networks for the word-pair test.
+# usage: wp_net.prl wp_gram_file nn nl
+#
+# TL 7/1998
+#
+
+$[ = 1;						# set array base to 1
+
+if ( $#ARGV != 4 ) {
+	die "usage: wp_net.prl word-pair_grammar_file output_net_file nn nl\n";
+}
+
+$wp_file = $ARGV[1];
+if ( ! -f $wp_file ) {
+	die "word-pair_grammar_file $wp_file not found.\n";
+}
+
+$net_file = $ARGV[2];
+$nn = $ARGV[3];
+$nl = $ARGV[4];
+
+open(NETFILE,">$net_file") or die "Can't open file $net_file\n";
+
+for ( $i=1; $i<=2; $i++ ) {
+	open(WPFILE,"<$wp_file") or die "Can't open file $wp_file\n";
+	while (<WPFILE>) {
+	    chop;				# strip record separator
+		/\*/ && next;		# skip comment line
+	    @Fld = split(' ', $_, 9999);
+	
+		if ($#Fld == 0) {
+			if ($ln > 990) {
+			    $links = 1;
+			}
+			elsif (!$ln) {
+			    printf NETFILE "N=%d L=%d\n", $nn, $nl;
+			    $stwd = '!SENT_START';
+			    printf NETFILE "I=%-4d W=%s\n", 0, $stwd;
+			    $enwd = '!SENT_END';
+			    $word = 'SENTENCE-END';
+			    $num{$word} = 1;
+			    $words{1} = $word;
+			    printf NETFILE "I=%-4d W=%s\n", 1, $enwd;
+			    $ln = 2;
+			}
+		}
+		elsif ($links) {
+			if (substr($Fld[1], 1, 1) eq '>') {
+			    $word = substr($Fld[1], 2, length($Fld[1]) - 1);
+			}
+			else {
+			    $like = -log($nfoll{$word});
+			    if ($word eq 'SENTENCE-END') {
+					printf NETFILE "J=%-5d S=%-4d E=%-4d l=%.4f\n", $la, 0, $num{$Fld[1]}, $like;
+			    }
+			    else {
+					printf NETFILE "J=%-5d S=%-4d E=%-4d l=%.4f\n", $la, $num{$word}, $num{$Fld[1]}, $like;
+			    }
+			    $la++;
+			}
+		}
+		elsif ($ln) {
+			if (substr($Fld[1], 1, 1) eq '>') {
+			    $word = substr($Fld[1], 2, length($Fld[1]) - 1);
+			    $nfoll{$word} = 0;
+			    if ($num{$word}) {
+					$n = $num{$word};
+			    }
+			    else {
+					$n = $ln;
+					$num{$word} = $ln++;
+					printf NETFILE "I=%-4d W=%s\n", $n, $word;
+			    }
+			}
+			else {
+			    $nfoll{$word}++;
+			}
+		}
+	}
+}
+
+close(WPFILE);
+close(NETFILE);

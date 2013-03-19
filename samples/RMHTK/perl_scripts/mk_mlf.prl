@@ -1,0 +1,41 @@
+#!/usr/local/bin/perl
+
+# This script will convert the SNOR word-level transcriptions
+# distributed on the CD-ROMs into HTK format. 
+#   
+# usage: mk_mlf.prl snr_trascriptions_file mlf_file
+#
+# TL 7/1998
+#
+
+if ( $#ARGV != 1 ) {
+   die "usage: mk_mlf.prl snr_trascriptions_file mlf_file\n";
+}
+
+$snr_file=$ARGV[0];
+if (! -f $snr_file) {
+   die "snr trascriptions file $snr_file not found\n";
+}
+
+$mlf_file=$ARGV[1];
+
+open(SNRFILE,"<$snr_file") or die "Can't open snr trascriptions file $snr_file\n";
+open(MLFFILE,">$mlf_file") or die "Can't open mlf file $mlf_file\n";
+printf MLFFILE "#!MLF!#\n";
+while (<SNRFILE>) {
+	chop;       # strip record separator
+	/^;/ && next;
+	@Fld = split(' ', $_, 9999);
+
+	$name = substr($Fld[$#Fld], 1, length($Fld[$#Fld]) - 2);
+	$name =~ tr/A-Z/a-z/;
+
+	printf MLFFILE "%c*%s.lab%c\n",34,$name,34;
+
+	for ($i = 0; $i < $#Fld; $i++) {
+		printf MLFFILE "%s\n", $Fld[$i];
+	}
+	printf MLFFILE ".\n";
+}
+close(SNRFILE);   
+close(MLFFILE);   

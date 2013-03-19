@@ -1,0 +1,60 @@
+#!/bin/csh -f
+
+# This shell script invokes HHEd to perform a global edit of a set
+# of models.  It must be executed from within the directory holding
+# the hmm directories.
+#
+# Usage:   hedit m n
+#
+# where m is the index of the source directory and n is the index
+# of the target directory.  hedit assumes the existence of an edit file
+# in the current directory
+#
+#    edfilem.n - containing the required edit commands
+#
+# Example
+#
+#    cd R3; hedit 14 21
+#
+# Edit the models  stored in hmm14 and store the new models in 
+# an MMF in hmm21 using the edit commands stored in edfile14.21
+#
+# Copyright (c) Steve Young 1992, 1993
+# Last Updated 19/10/93
+#
+source  HTE
+
+if ( $#argv != 2 ) then
+   echo "hedit m n"
+   exit 0
+endif
+
+if ( -d hmm$1 ) then
+   set src = (-H hmm$1/MODELS)
+else
+   echo "No source dir hmm$1"
+   exit 1
+endif
+
+set tgt = (-M hmm$2)
+
+if ( ! -d hmm$2 ) mkdir hmm$2
+
+if ( ! -f $HMMLIST ) then
+   echo "List of models to edit $HMMLIST does not exist"
+   exit 1
+endif
+
+if ( ! -f edfile${1}.${2} ) then
+   echo "Edit command file edfile${1}.${2} does not exist"
+   exit 1
+endif
+
+if ($?HHTRACE) then
+   set OPT = (-T $HHTRACE)
+else
+   set OPT = (-T 1)
+endif
+
+HHEd -A -C $HECONFIG $OPT $src $tgt  edfile${1}.${2} $HMMLIST
+

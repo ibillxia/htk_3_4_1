@@ -1,0 +1,277 @@
+#!/usr/local/bin/perl
+
+push @INC, "$ENV{RMSCRIPTS}";   # include the perl script path
+require "global.pl";                    # include global variables
+require "env_conv.pm";                  # sub to convert env vars
+# require "/home/blue2/xl207/RM/work/R11/work/mswin/perl_scripts/global.pl";                    # include global variables
+# require "/home/blue2/xl207/RM/work/R11/work/mswin/perl_scripts/env_conv.pm";                  # sub to convert env vars
+
+# Check Number of Args
+if ( $#ARGV != 2 ) {
+	die "Usage: latgen env hmmdir tgtdir\n";
+}
+
+# Read the environment file
+$Env_file = $ARGV[0];
+if ( ! -f $Env_file ) {
+	die "latgen: cannot find environment file $Env_file\n";
+}
+
+# convert environment file to perl format
+$Perl_env = "HE_env.pl";
+&env_conv::env_convert($Env_file,$Perl_env);
+
+# read in variable value from new file in perl format
+require "$Perl_env";
+
+# Check Source Exists
+$SRC = $ARGV[1];
+if ( -d $SRC ) {
+   $srcopt = "-H $SRC\\MODELS";
+}
+else {
+   die "latgen: source dir $SRC does not exist\n";
+}
+
+# Check settings
+if ( ! defined ($RMLIB) ) {
+die "RMLIB not set\n";
+}
+if ( ! defined ($HLMCONFIG) ) {
+die "HLMCONFIG not set\n";
+}
+if ( ! defined ($HDCONFIG) ) {
+die "HDCONFIG not set";
+}
+if ( ! defined ($HDMODCONFIG) ) {
+die "HDMODCONFIG not set\n";
+}
+if ( ! defined ($HLRCONFIG) ) {
+die "HLRCONFIG not set\n";
+}
+if ( ! defined ($TRAINDATALIST) ) {
+die "TRAINDATALIST not set\n";
+}
+if ( ! defined ($TRAINMLF) ) {
+die "TRAINMLF not set\n";
+}
+if ( ! defined ($HDVOCAB) ) {
+die "HDVOCAB not set\n";
+}
+if ( ! defined ($HLMORDER) ) {
+die "HLMORDER not set\n";
+}
+if ( ! defined ($HLMNNEWWORD) ) {
+die "HLMNNEWWORD not set\n";
+}
+if ( ! defined ($HLMBUFSIZE) ) {
+die "HLMBUFSIZE not set\n";
+}
+if ( ! defined ($HLMUGFLR) ) {
+die "HLMUGFLR not set\n";
+}
+if ( ! defined ($HLMNGRAMCUTOFF) ) {
+die "HLMNGRAMCUTOFF not set\n";
+}
+if ( ! defined ($HLMDISCOUNT) ) {
+die "HLMDISCOUNT not set\n";
+}
+if ( ! defined ($HDGENBEAM) ) {
+die "HDGENBEAM not set";
+}
+if ( ! defined ($HDGSCALE) ) {
+die "HDGSCALE not set\n";
+}
+if ( ! defined ($HDIMPROB) ) {
+die "HDIMPROB not set\n";
+}
+if ( ! defined ($HDTOKENS) ) {
+die "HDTOKENS not set\n";
+}
+if ( ! defined ($HLRGSCALE) ) {
+die "HLRGSCALE not set\n";
+}
+if ( ! defined ($HLRIMPROB) ) {
+die "HLRIMPROB not set\n";
+}
+if ( ! defined ($HLRMRGDIR) ) {
+die "HLRMRGDIR not set\n";
+}
+if ( ! defined ($HLRGENBEAM) ) {
+die "HLRGENBEAM not set\n";
+}
+
+# remove perl environment variable file
+unlink $Perl_env;
+
+# Create/Clear Target Directory
+$tgt = $ARGV[2];
+if (! -d $tgt ) {
+  system("mkdir $tgt");
+}
+
+print  "latgen started at " . scalar localtime(time) . "\n"; 
+
+$data = "ind_trn109";
+ 
+# Building LM
+
+# system("copy $RMLIB/R11.mswin/lib.zip .");
+# system("cd $tgt; cp -rp /home/blue2/xl207/RM/work/R11/work/mswin/lib/R11.linux/lib ./");
+
+print "\n";
+print "Building Back-off Bi-gram LM from:\n";
+print "\n";
+print "  Text Input:    ${data}.dat\n";
+print "  Vocabulary:    rm.wlist\n";
+
+$tmpdir = "$tgt\\lib\\lms";
+printf "%s\n", $tmpdir;
+
+system("mkdir $tmpdir\\db_2-gram.${data}");
+
+$LGPOPTS = "-A -D -V -C ${HLMCONFIG} -T ${HLMTRACE} -a ${HLMNNEWWORD} -b ${HLMBUFSIZE} -n ${HLMORDER}"; 
+system("LGPrep ${LGPOPTS} -d $tmpdir\\db_2-gram.${data} $tmpdir\\empty.wmap $tmpdir\\${data}.dat > $tmpdir\\LOG");
+
+$LGCOPTS = "-A -D -V -C ${HLMCONFIG} -T ${HLMTRACE} -a ${HLMNNEWWORD} -b ${HLMBUFSIZE}";
+system("LGCopy ${LGCOPTS} -o -m $tmpdir\\db_2-gram.${data}\\wmap.new -d $tmpdir\\db_2-gram.${data} -w $tmpdir\\rm.wlist $tmpdir\\db_2-gram.${data}\\wmap $tmpdir\\db_2-gram.${data}\\gram.0 >> $tmpdir\\LOG");
+
+$LBOPTS = "-A -D -V -C ${HLMCONFIG} -T ${HLMTRACE} -u ${HLMUGFLR} -k ${HLMDISCOUNT} -c ${HLMNGRAMCUTOFF} -n ${HLMORDER}";
+system("LBuild ${LBOPTS} $tmpdir\\db_2-gram.${data}\\wmap.new $tmpdir\\bg.${data} $tmpdir\\db_2-gram.${data}\\gram.0 >> $tmpdir\\LOG");
+
+print "\n";
+print "Back-off Bi-gram LM built: lib\\lms\\bg.${data} \n";
+print "\n";
+
+# Generate lattices
+
+print "\n";
+print "Starting lattice generation from: \n \n";
+print "  Data Setup:    ${TRAINDATALIST} \n";
+print "  Word Label:    ${TRAINMLF} \n";
+print "  HMM Set:       ${SRC}\\MODELS \n";
+print "  HMM List:      ${HMMLIST} \n";
+print "  Vocabulary:    ${HDVOCAB} \n";
+print "  N-gram LM:     lib\\lms\\bg.${data} \n";
+print "\n \n";
+
+@dirs = ("numnets", "dennets", "lattices");
+foreach $d (@dirs) {
+    system("mkdir $tgt\\$d");
+}
+
+@dirs = ("num", "den");
+foreach $d (@dirs) {
+    system("mkdir $tgt\\lattices\\$d");
+}
+
+$HLROPTS = "-A -D -V -T ${HLRTRACE} -q tvalr -C ${HLRCONFIG} -w -s ${HLRGSCALE} -p ${HLRIMPROB}";
+$HDOPTS  = "-A -D -V -T ${HDTRACE} -t ${HDGENBEAM} -s ${HDGSCALE} -p ${HDIMPROB} -n ${HDTOKENS} -C ${HDCONFIG} ";
+
+open F, "$tgt\\lib\\flists\\spkr.list" or die "Can't open $tgt\\lib\\flists\\spkr.list\n";
+# open F, "/home/blue2/xl207/RM/work/R11/work/mswin/foo.list" or die "Can't open $tgt/lib/flists/spkr.list\n";
+while (<F>) {
+    $i = substr($_, 0, length($_)-1);
+    print "Processing speaker ${i} : \n";
+    print "\n";
+
+    system("mkdir $tgt\\numnets\\${i}"); 
+    system("HLRescore ${HLROPTS} -n $tgt\\lib\\lms\\bg.${data} -I ${TRAINMLF} -f -i $tgt\\numnets\\${i}\\bg.${i}.mlf -l $tgt\\numnets\\${i} -S $tgt\\lib\\flists\\${i}.labscp ${HDVOCAB} > $tgt\\numnets\\${i}\\LOG"); 
+
+    system("mkdir $tgt\\lattices\\num\\${i}"); 
+    system("HDecode.mod ${HDOPTS} -C ${HDMODCONFIG} -i $tgt\\lattices\\num\\${i}\\num.${i}.mlf -H ..\\${SRC}\\MODELS -d ..\\${SRC} -q tvaldm -o M -z lat -w -L $tgt\\numnets\\${i} -l $tgt\\lattices\\num\\${i} -X lat -S $tgt\\lib\\flists\\${i}.scp ${HDVOCAB} ${HMMLIST} > $tgt\\lattices\\num\\${i}\\LOG"); 
+
+    print "numerator lattices generated for speaker ${i} : \n";
+    print "\n";
+
+    system("mkdir $tgt\\dennets\\${i}"); 
+    system("mkdir $tgt\\dennets\\${i}\\bg"); 
+    system("HDecode ${HDOPTS} -i $tgt\\dennets\\${i}\\bg.${i}.mlf -H ..\\${SRC}\\MODELS -d ..\\${SRC} -o M -z lat -w $tgt\\lib\\lms\\bg.${data} -l $tgt\\dennets\\${i}\\bg -X lat -S $tgt\\lib\\flists\\${i}.scp ${HDVOCAB} ${HMMLIST} > $tgt\\dennets\\${i}\\LOG"); 
+
+    system("HLRescore ${HLROPTS} -t ${HLRGENBEAM} -m ${HLRMRGDIR} -L $tgt\\dennets\\${i}\\bg -l $tgt\\dennets\\${i} -S $tgt\\lib\\flists\\${i}.latscp ${HDVOCAB} > $tgt\\dennets\\${i}\\hlr.LOG"); 
+
+    system("mkdir $tgt\\lattices\\den\\${i}"); 
+    system("HDecode.mod ${HDOPTS} -C ${HDMODCONFIG} -i $tgt\\lattices\\den\\${i}\\den.${i}.mlf -H ..\\${SRC}\\MODELS -d ..\\${SRC} -q tvaldm -o M -z lat -w -L $tgt\\dennets\\${i} -l $tgt\\lattices\\den\\${i} -X lat -S $tgt\\lib\\flists\\${i}.scp ${HDVOCAB} ${HMMLIST} > $tgt\\lattices\\den\\${i}\\LOG"); 
+
+    print "denominator lattices generated for speaker ${i} : \n";
+    print "\n";
+}
+close(F);
+
+
+# Preparing new scp file for discriminative training
+
+open F, "$tgt\\lib\\flists\\spkr.list" or die "Can't open $tgt\\lib\\flists\\spkr.list\n";
+# open F, "/home/blue2/xl207/RM/work/R11/work/mswin/foo.list" or die "Can't open $tgt/lib/flists/spkr.list\n";
+open (OUT, ">$tgt\\failed.scp") or die "Can't open $tgt\\failed.scp\n";
+while (<F>) { 
+    $i = substr($_, 0, length($_)-1);
+
+    open L, "$tgt\\lattices\\num\\${i}\\LOG" or die "Can't open $tgt\\lattices\\num\\${i}\\LOG\n";
+    while (<L>) {
+        chop; 
+        @l=split; 
+        if($#l==1 && $l[0] eq "File:") {
+            $cur=$l[1]; 
+            $f=1; 
+        } 
+        if($f==1 && $l[0] eq "WARNING"){ 
+            printf OUT "%s\n", $cur; 
+            $f=0;
+        }
+    }
+    close(L);
+
+    open L, "$tgt\\lattices\\den\\${i}\\LOG" or die "Can't open $tgt\\lattices\\den\\${i}\\LOG\n";
+    while (<L>) {
+        chop; 
+        @l=split; 
+        if($#l==1 && $l[0] eq "File:") {
+            $cur=$l[1]; 
+            $f=1; 
+        } 
+        if($f==1 && $l[0] eq "WARNING"){ 
+            printf OUT "%s\n", $cur; 
+            $f=0;
+        }
+    }
+    close(L);
+}
+close(OUT);
+close(F);
+
+$nfailed = 0;
+@failed  = "";
+open F, "$tgt\\failed.scp" or die "Can't open $tgt\\failed.scp\n";
+while (<F>) { 
+    $i = substr($_, 0, length($_)-1);
+    if (!defined $M{$i}) {
+        $M{$i} = 1;
+        $N++;
+        $failed[$N] = $i;
+    }    
+}
+close(F);
+
+printf "Removing a total of %d segments that failed in lattice generation :\n\n", $N;
+for($i=1; $i<=$N; $i++) {
+    printf "%s\n", $failed[$i];
+}
+print "\n";
+
+open F, "$tgt\\lib\\flists\\${data}.scp" or die "Can't open $tgt\\lib\\flists\\${data}.scp\n";
+open OUT, ">$tgt\\lib\\flists\\${data}.lat.scp" or die "Can't open $tgt\\lib\\flists\\${data}.lat.scp\n";
+while (<F>) { 
+    $i = substr($_, 0, length($_)-1);
+    if (!defined $M{$i}) {
+        printf OUT "%s\n", $i;
+    }        
+}
+close(OUT);
+close(F);
+
+system("copy $tgt\\lib\\flists\\${data}.lat.scp $rmlib\\flists\\${data}.lat.scp");
+print "New scp file for discriminative training saved to ${rmlib}\\flists\\${data}.lat.scp\n\n";
+
+print  "latgen finished at " . scalar localtime(time) . "\n"; 
+

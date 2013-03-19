@@ -1,0 +1,143 @@
+#!/bin/tcsh -f
+# set verbose
+
+# Check Number of Args
+if ( $#argv != 3 ) then
+    echo "Usage: $0 env hmmdir tgtdir";
+    exit 1;
+endif
+ 
+# Read the environment file
+if ( ! -f $1 ) then
+   echo "$0: cannot find environment file $1";
+   exit 1;
+endif
+
+source $1;
+
+if ( ! -d $2 || ! -f $2/MODELS ) then
+   echo "$0: hmm model $2 does not exist";
+   exit 1;
+endif
+    
+# Create/Clear Target Directory
+set tgt = $3;
+
+# Check settings
+if ( ! $?rmlib ) then
+echo rmlib not set; exit 1;
+endif
+if ( ! $?HLMCONFIG ) then
+echo HLMCONFIG not set; exit 1;
+endif
+if ( ! $?HDCONFIG ) then
+echo HDCONFIG not set; exit 1;
+endif
+if ( ! $?HDMODCONFIG ) then
+echo HDMODCONFIG not set; exit 1;
+endif
+if ( ! $?HLRCONFIG ) then
+echo HLRCONFIG not set; exit 1;
+endif
+if ( ! $?TRAINDATALIST ) then
+echo TRAINDATALIST not set; exit 1;
+endif
+if ( ! $?TRAINMLF ) then
+echo TRAINMLF not set; exit 1;
+endif
+if ( ! $?HDVOCAB ) then
+echo HDVOCAB not set; exit 1;
+endif
+if ( ! $?HLMORDER ) then
+echo HLMORDER not set; exit 1;
+endif
+if ( ! $?HLMNNEWWORD ) then
+echo HLMNNEWWORD not set; exit 1;
+endif
+if ( ! $?HLMBUFSIZE ) then
+echo HLMBUFSIZE not set; exit 1;
+endif
+if ( ! $?HLMUGFLR ) then
+echo HLMUGFLR not set; exit 1;
+endif
+if ( ! $?HLMNGRAMCUTOFF ) then
+echo HLMNGRAMCUTOFF not set; exit 1;
+endif
+if ( ! $?HLMDISCOUNT ) then
+echo HLMDISCOUNT not set; exit 1;
+endif
+if ( ! $?HDGENBEAM ) then
+echo HDGENBEAM not set; exit 1;
+endif
+if ( ! $?HDGSCALE ) then
+echo HDGSCALE not set; exit 1;
+endif
+if ( ! $?HDIMPROB ) then
+echo HDIMPROB not set; exit 1;
+endif
+if ( ! $?HDTOKENS ) then
+echo HDTOKENS not set; exit 1;
+endif
+if ( ! $?HLRGSCALE ) then
+echo HLRGSCALE not set; exit 1;
+endif
+if ( ! $?HLRIMPROB ) then
+echo HLRIMPROB not set; exit 1;
+endif
+if ( ! $?HLRMRGDIR ) then
+echo HLRMRGDIR not set; exit 1;
+endif
+if ( ! $?HLRGENBEAM ) then
+echo HLRGENBEAM not set; exit 1;
+endif
+
+set data =  ( `basename ${TRAINMLF} | awk -F\. '{print $1}'` );
+
+# Building LM
+mkdir -p $tgt/lib/lms;
+cd $tgt/lib/lms;
+
+echo "";
+echo "Building Back-off Bi-gram LM from:";
+echo "";
+echo "  Text Input:    ${TRAINMLF}";
+echo "  Vocabulary:    ${HDVOCAB}";
+echo "";
+
+cat ${HDVOCAB} | awk '{print $1}' | sort -u > rm.wlist; 
+echo \!\!UNK > rm.wlist+ukn; 
+cat ${HDVOCAB} | awk '{print $1}' | sort -u >> rm.wlist+ukn; 
+gzip -f rm.wlist*;
+
+cat ${TRAINMLF} | egrep -v \# | awk '{if ($0 != "\.") printf("%s ", $0); else print $0;}' | awk '{printf("\!SENT_START "); for(i=2;i<=NF-1;i++){ printf ("%s ", $i);} printf("\!SENT_END\n"); }' > ${data}.dat; 
+gzip -f ${data}.dat;
+
+cat > empty.wmap << END
+Name    = rm
+SeqNo   = 0
+Entries = 0
+EscMode = RAW
+Fields  = ID,WFC
+\Words\
+END
+
+gzip -f empty.wmap;
+
+mkdir -p db_2-gram.${data};
+ 
+set LGPOPTS = ( -A -D -V -C ${HLMCONFIG} -T ${HLMTRACE} -a ${HLMNNEWWORD} -b ${HLMBUFSIZE} -n ${HLMORDER} );
+LGPrep ${LGPOPTS} -d db_2-gram.${data} empty.wmap ${data}.dat >& LOG;
+ 
+set LGCOPTS = ( -A -D -V -C ${HLMCONFIG} -T ${HLMTRACE} -a ${HLMNNEWWORD} -b ${HLMBUFSIZE} );
+LGCopy ${LGCOPTS} -o -m db_2-gram.${data}/wmap.new -d db_2-gram.${data} -w rm.wlist db_2-gram.${data}/wmap db_2-gram.${data}/gram.0.gz >> LOG;
+ 
+set LBOPTS = ( -A -D -V -C ${HLMCONFIG} -T ${HLMTRACE} -u ${HLMUGFLR} -k ${HLMDISCOUNT} -c ${HLMNGRAMCUTOFF} -n ${HLMORDER} );
+LBuild ${LBOPTS} db_2-gram.${data}/wmap.new bg.${data} db_2-gram.${data}/gram.0.gz >> LOG;
+
+echo "Number of N-grams trained:"
+echo `gunzip -c bg.${data}.gz | head -10 | egrep ngram`;
+echo "";
+
+bzip2 -f LOG;
+cd ../../;
+

@@ -1,0 +1,353 @@
+#!/usr/local/bin/perl
+
+#---------------------------------------------------------------#
+# HTK Perl Script: htestrm.prl                                  #
+#                                                               #
+# Usage:  htestrm.prl env type set hmmdir                       #
+#                                                               #
+# htestrm uses the HTK environment settings to recognise the    #
+# specified set of test files and then compares them with the   #
+# reference labels using HResults.                              #
+# type  is used to select a type of test of conditions from the #
+# env file. set selects the test data independently of type.    #
+# The test results are stored in a directory called             #
+# test_type_set.k inside the source hmm directory hmmdir        #
+# where k is the  repetition idx.                               #
+# A copy of the env file containing the test parameters is left #
+#in the test directory (typically changed for different indexes)#         
+# The shell variable TESTSET is set equal to set & is used to   #
+# specify the test data in the HTE file.                        #
+# Others variables in the HTE file are indexed to reflect       #
+# values with different type the different type in an order     #
+# given by the HTE variable TYPELIST                            #
+#                                                               #
+#   TYPELIST - name of possible type values                     #
+#   SETLIST - list of possible TESTSET & set values             #
+#   TESTDATALIST- list of test files (TESTSET)                  #
+#   TESTMLF     - MLF for reference labs (if used)  (TESTSET)   #
+#   TESTLABDIR  - dir holding reference lab files               #
+#   HMMLIST  - list of models to use in testing                 #
+#   HVTRACE     - trace level                                   #
+#   HVPRUNE - pruning threshold (indexed)                       #
+#   HVWEPRUNE - word-end pruning threshold (indexed)            #
+#   HVMAXACTIVE - max number of phone insts active (indexed)    #
+#   HVGSCALE    - grammar scale factor (indexed)                #
+#   HVIMPROB - inter-model log probability addition(indexed)    #
+#   HVNET   - network definition file (indexed)                 #
+#   WORDLIST- list of vocabulary items                          #
+#   HRNIST  - run HResults in NIST mode                         #
+#   NISTSCORE - run the NIST scoring software                   #
+#   NICE    - nice level to run at                              #
+#---------------------------------------------------------------#
+#
+# Copyright (c) Phil Woodland & Steve Young, 1992, 1993
+# Last Updated 19/10/93
+#
+# Converted to Perl script by TL 7/1998
+#
+
+push @INC, "$ENV{RMSCRIPTS}";   # include the perl script path
+require "global.pl";                    # include global variables
+require "env_conv.pm";                  # sub to convert env vars
+
+# Check Number of Args 
+if ( $#ARGV != 3 && $#ARGV != 4 ) {
+	die "Usage: htestrm.prl env tsttype tstset hmmdir [inxformdir]\n";
+}
+
+# Read the environment file
+$Env_file = $ARGV[0];
+if ( ! -f $Env_file ) {
+die "htestrm: cannot find environment file $Env_file\n";
+}
+
+$TYPE=$ARGV[1];
+$SET=$ARGV[2];
+$TESTSET=$SET;
+
+# convert environment file to perl format
+$Perl_env = "HE_env.pl";
+&env_conv::env_convert($Env_file,$Perl_env);
+
+# read in variable value from new file in perl format
+require "$Perl_env";
+
+# Check the type
+if (! defined $TYPELIST) {
+	die "htestrm: TYPELIST  not set\n";
+}
+
+undef $INDEX;
+$count=0;
+@typelists = &tidy_up_and_split_list($TYPELIST);
+foreach $type (@typelists) {
+	$count++;
+	if ($type eq $TYPE) {
+		$INDEX=$count;
+		last;
+	}
+}
+if (! defined $INDEX) {
+	die "htestrm: $TYPE not in TYPELIST\n"; 
+}
+
+# Check the test set
+undef $setfound;
+if (! defined $SETLIST) {
+	die "htestrm: SETLIST  not set\n";
+}
+@setlists = &tidy_up_and_split_list($SETLIST);
+foreach $setlist (@setlists) {
+	if ($setlist eq $SET) {
+		$setfound = 1;
+		last;
+	}
+}
+if ( (! defined $setfound) && ( $SET ne "dms0_tst" ) ) {
+	die "htestrm: $SET not in SETLIST\n";
+}
+
+# Check hmmsource Exists
+$HMMSOURCE=$ARGV[3];
+if ( ! -d $HMMSOURCE ) {
+   die "htestrm: error - hmm directory $HMMSOURCE does not exist\n";
+}
+
+# Set test dir
+undef $TESTDIRSET;
+$TESTEXTN=1;
+
+while (! defined $TESTDIRSET) {
+	if ( $SET eq "dms0_tst" ) {
+		$TESTDIR="$HMMSOURCE\\$SET";
+	}
+	else {
+		$TESTDIR="$HMMSOURCE\\test_$TYPE"."_"."$SET.$TESTEXTN";
+	}
+	if ( ! -d $TESTDIR ) {
+		mkdir $TESTDIR, 0755;
+		$TESTDIRSET = 1;
+	}
+	else {
+      $TESTEXTN++;
+   }
+}
+
+# Define the file to log all output/errors to
+$LOG="$TESTDIR\\LOG";
+
+# Copy the test HTE file as a record
+system("copy $Env_file $TESTDIR\\HTE");
+
+# Check the equates file and load equates
+if (defined $HREQSETS) {
+	@hreqsets = &tidy_up_and_split_list($HREQSETS);
+	$INDEX--;
+	$EQFILE="$hreqsets[$INDEX]";
+	if ( ! -f $EQFILE ) {
+		die "Cannot find HResults equates file $EQFILE\n";
+	}
+}
+
+# Set HVite Options
+$OPT = "-H $HMMSOURCE\\MODELS ";
+$SRC = $HMMSOURCE;
+
+if ( defined($HVXFORMCONFIG ) ) {
+    $OPT = "$OPT -C $HVXFORMCONFIG";
+}
+if ( defined($HVSPKRMASK_WIN) ) {
+	$OPT = "$OPT -h $HVSPKRMASK_WIN";
+}
+if ( $#ARGV == 4 ) {
+# printf "%d  %d\n", $#ARGV, $ARGV[4];
+    $INXFDIR = $ARGV[4];
+    $OPT = "$OPT -k -J $INXFDIR";
+    if ( defined($HVINXFORMEXT) ) {
+        $OPT = "$OPT $HVINXFORMEXT";
+    }
+}
+if ( defined($HVPAXFORMDIR) ) {
+    $OPT = "$OPT -E $HVPAXFORMDIR";
+    if ( defined($HVPAXFORMEXT) ) {
+        $OPT = "$OPT $HVPAXFORMEXT";
+    }
+}
+if ( defined($HVFORCEXFORMDIR) ) {
+    for ($i=0; $i<$#HVFORCEXFORMDIR; $i++) {       
+        $OPT = "$OPT -J $HVFORCEXFORMDIR[$i]";
+    }
+}
+# Always have the source directory as a possible input directory
+$OPT = "$OPT -J $SRC";
+if ( defined($HVFORCEMACRO) ) {
+    for ($i=0; $i<$#HVFORCEMACRO; $i++) {       
+        $OPT = "$OPT -H $HVFORCEMACRO[$i]";
+    }
+}
+
+if ( defined($HVINCADAPT) ) { 
+   $OPT = "$OPT -j $HVINCADAPT -K $TESTDIR";
+   if ( defined($HVOUTXFORMEXT) ) { 
+       $OPT = "$OPT $HVOUTXFORMEXT";
+   }
+}
+else {
+    if ( defined($HVADAPT) ) { 
+        $OPT = "$OPT -K $TESTDIR";
+        if ( defined($HVOUTXFORMEXT) ) { 
+            $OPT = "$OPT $HVOUTXFORMEXT";
+        }
+    }
+}
+   
+if ( $SET eq "dms0_tst" ) {
+	$HVOPFILE = "$TESTDIR\\$SET.mlf";
+	$TESTDATALIST="$rmlib\\flists\\${TESTSET}.scp";
+	$TESTMLF="$rmlib\\wlabs\\dms0_tst.mlf";
+}
+else {
+	$HVOPFILE = "$TESTDIR\\$TYPE"."_"."$SET.mlf";
+}
+	
+$OPT = "$OPT -i $HVOPFILE ";
+$OPT = "$OPT -X rec ";
+
+if (defined $HVTRACE) {
+	$OPT = "$OPT -T $HVTRACE ";
+}
+
+# add the indexed options
+
+if (defined $HVTRANSFORM) {
+	$OPT = "$OPT -J $HVTRANSFORM";
+}
+if (defined $HVPRUNE) {
+	@hvprune = &tidy_up_and_split_list($HVPRUNE);
+	$OPT = "$OPT -t $hvprune[$INDEX] ";
+}
+if (defined $HVWEPRUNE) {
+	@hvweprune = &tidy_up_and_split_list($HVWEPRUNE);
+	$OPT = "$OPT -v $hvweprune[$INDEX] ";
+}
+if (defined $HVMAXACTIVE) {
+	@hvmaxactive = &tidy_up_and_split_list($HVMAXACTIVE);
+	$OPT = "$OPT -u $hvmaxactive[$INDEX] ";
+}
+if (defined $HVGSCALE) {
+	@hvgscale = &tidy_up_and_split_list($HVGSCALE);
+	$OPT = "$OPT -s $hvgscale[$INDEX] ";
+}
+if (defined $HVIMPROB) {
+	@hvimprob = &tidy_up_and_split_list($HVIMPROB);
+	$OPT = "$OPT -p $hvimprob[$INDEX] ";
+}
+@hvnet = &tidy_up_and_split_list($HVNET);
+$NET=$hvnet[$INDEX];
+$OPT = "$OPT -w $NET";
+
+if ( defined($HVALIGN) ) {
+   $OPT = "$OPT -m -o TPMFW -b \!SENT_START -a -y lab";
+   if ( defined($ALIGNMLF) ) {
+        $OPT = "$OPT -I $ALIGNMLF";
+   }
+   else {
+	die "Must specify an alignment MLF";
+   }
+}
+
+if (defined $HVVOC) {
+	@hvvoc = &tidy_up_and_split_list($HVVOC);
+	$VOC=$hvvoc[$INDEX];
+}
+else {
+	die "HVVOC not set\n";
+}
+
+# remove perl environment variable file
+unlink $Perl_env;
+
+# -------------- Run HVite -----------------
+
+open(LOGFILE,">$LOG") or die "Can't open $LOG file\n";
+printf LOGFILE "HVite started at " . scalar localtime(time) . "\n";
+close (LOGFILE);
+system("HVite -A -C $HVCONFIG $OPT -S $TESTDATALIST $VOC $HMMLIST >> $LOG");
+
+open(LOGFILE,">>$LOG") or die "Can't open $LOG file\n";
+printf LOGFILE "HVite finished at " . scalar localtime(time) . "\n\n";
+close (LOGFILE);
+
+# ------------------------------------------
+# Now for results analysis
+#
+
+# Set the equates if any
+$EQ = "";
+undef $Ind;
+open(EQFILENAME,"<$EQFILE") or die "Can't open $EQFILE file\n";
+while (<EQFILENAME>) {
+	chop ;
+	if (! defined $I) {
+		$EQ="$EQ -e ";
+		$Ind = 1;
+	}
+	else {
+		undef $Ind;
+	}
+	$EQ="$EQ $_";
+}
+close(EQFILENAME);
+
+$OPT="";
+
+if (defined $TESTMLF) {
+   $OPT="$OPT -I $TESTMLF ";
+}
+
+if (defined $TESTLABDIR) {
+   $OPT="$OPT -L $TESTLABDIR ";
+}
+
+if (defined $HRNIST) {
+  $OPT = "$OPT -n ";
+}
+
+open(LOGFILE,">>$LOG") or die "Can't open $LOG file\n";
+printf LOGFILE "Running HResults at " . scalar localtime(time) . "\n";
+close (LOGFILE);
+
+system("HResults -A -z ::: $OPT $EQ $WORDLIST $HVOPFILE >> $LOG");
+
+open(LOGFILE,">>$LOG") or die "Can't open $LOG file\n";
+printf LOGFILE "HResults finished at " . scalar localtime(time) . "\n\n";
+close (LOGFILE);
+
+# ------------------------------------------
+# Now for NIST scoring if required
+#
+
+if (defined $NISTSCORE) {
+	print "NIST score scripts can be run under 'sh' Shell at reader's own wish\n";
+	print "It is not however supported in Perl Shell\n";
+}
+
+open(LOGFILE,">>$LOG") or die "Can't open $LOG file\n";
+printf LOGFILE "htestrm.prl finished at " . scalar localtime(time) . "\n\n";
+close (LOGFILE);
+
+sub tidy_up_and_split_list {
+	local($listval) = @_;
+
+	$listval =~ s/\s+/ /g;
+	$listval =~ s/^ //;
+	$listval =~ s/ $//;
+
+	local(@listvals) = split(" ",$listval);
+	@listvals;
+}
+
+#---------------------------------------------------------------#
+#                   End of Script: htestrm                      #
+#---------------------------------------------------------------#
+

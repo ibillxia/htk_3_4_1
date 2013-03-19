@@ -1,0 +1,6 @@
+Name    = rm
+SeqNo   = 0
+Entries = 0
+EscMode = RAW
+Fields  = ID,WFC
+\Words\

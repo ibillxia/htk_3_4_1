@@ -1,0 +1,21 @@
+<BEGINproto_config_file>
+
+<COMMENT>
+   This PCF produces a 3 stream, single mixture, FULLC prototype system.
+
+<BEGINsys_setup>
+
+hsKind: P
+covKind: F
+nStates: 3
+nStreams: 3
+sWidths: 12 12 2
+mixes: 1 1 1
+parmKind: MFCC_E_D
+vecSize: 26
+outDir: proto
+hmmList: lists/bcplist
+
+<ENDsys_setup>
+
+<ENDproto_config_file>

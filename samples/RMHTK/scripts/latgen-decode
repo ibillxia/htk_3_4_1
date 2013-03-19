@@ -1,0 +1,148 @@
+#!/bin/tcsh -f
+# set verbose
+
+# Check Number of Args
+if ( $#argv != 3 ) then
+    echo "Usage: $0 env hmmdir tgtdir";
+    exit 1;
+endif
+ 
+# Read the environment file
+if ( ! -f $1 ) then
+   echo "$0: cannot find environment file $1";
+   exit 1;
+endif
+
+source $1;
+
+if ( ! -d $2 || ! -f $2/MODELS ) then
+   echo "$0: hmm model $2 does not exist";
+   exit 1;
+endif
+    
+# Create/Clear Target Directory
+set tgt = $3;
+
+# Check settings
+if ( ! $?rmlib ) then
+echo rmlib not set; exit 1;
+endif
+if ( ! $?HLMCONFIG ) then
+echo HLMCONFIG not set; exit 1;
+endif
+if ( ! $?HDCONFIG ) then
+echo HDCONFIG not set; exit 1;
+endif
+if ( ! $?HDMODCONFIG ) then
+echo HDMODCONFIG not set; exit 1;
+endif
+if ( ! $?HLRCONFIG ) then
+echo HLRCONFIG not set; exit 1;
+endif
+if ( ! $?TRAINDATALIST ) then
+echo TRAINDATALIST not set; exit 1;
+endif
+if ( ! $?TRAINMLF ) then
+echo TRAINMLF not set; exit 1;
+endif
+if ( ! $?HDVOCAB ) then
+echo HDVOCAB not set; exit 1;
+endif
+if ( ! $?HLMORDER ) then
+echo HLMORDER not set; exit 1;
+endif
+if ( ! $?HLMNNEWWORD ) then
+echo HLMNNEWWORD not set; exit 1;
+endif
+if ( ! $?HLMBUFSIZE ) then
+echo HLMBUFSIZE not set; exit 1;
+endif
+if ( ! $?HLMUGFLR ) then
+echo HLMUGFLR not set; exit 1;
+endif
+if ( ! $?HLMNGRAMCUTOFF ) then
+echo HLMNGRAMCUTOFF not set; exit 1;
+endif
+if ( ! $?HLMDISCOUNT ) then
+echo HLMDISCOUNT not set; exit 1;
+endif
+if ( ! $?HDGENBEAM ) then
+echo HDGENBEAM not set; exit 1;
+endif
+if ( ! $?HDGSCALE ) then
+echo HDGSCALE not set; exit 1;
+endif
+if ( ! $?HDIMPROB ) then
+echo HDIMPROB not set; exit 1;
+endif
+if ( ! $?HDTOKENS ) then
+echo HDTOKENS not set; exit 1;
+endif
+if ( ! $?HLRGSCALE ) then
+echo HLRGSCALE not set; exit 1;
+endif
+if ( ! $?HLRIMPROB ) then
+echo HLRIMPROB not set; exit 1;
+endif
+if ( ! $?HLRMRGDIR ) then
+echo HLRMRGDIR not set; exit 1;
+endif
+if ( ! $?HLRGENBEAM ) then
+echo HLRGENBEAM not set; exit 1;
+endif
+
+cd $tgt;
+
+set data =  ( `basename ${TRAINMLF} | awk -F\. '{print $1}'` );
+
+# Prepare scp file lists
+mkdir -p lib/flists;
+cd lib/flists;
+
+echo "Preparing scp file lists in lib/flists ...";
+
+ln -s ${TRAINDATALIST};
+cat ${data}.scp | awk -F\/ '{print $(NF-1)}' | sort -u > spkr.list;
+
+foreach i ( `cat spkr.list` )
+    egrep ${i} ${data}.scp > ${i}.scp; 
+    egrep ${i} ${data}.scp | awk -F\/ '{printf("*/%s\n", $NF);}' | sed 's:.mfc:.lab:g' > ${i}.labscp; 
+    egrep ${i} ${data}.scp | awk -F\/ '{printf("*/%s\n", $NF);}' | sed 's:.mfc:.lat:g' > ${i}.latscp; 
+end
+
+cd ../../;
+
+# Generate lattices
+
+echo "";
+echo "Starting lattice generation from:";
+echo "";
+echo "  Data Setup:    ${TRAINDATALIST}";
+echo "  Word Label:    ${TRAINMLF}";
+echo "  HMM Set:       ${2}/MODELS";  
+echo "  HMM List:      ${HMMLIST}";
+echo "  Vocabulary:    ${HDVOCAB}";
+echo "  N-gram LM:     lib/lms/bg.${data}";
+echo "";
+
+ln -s ../hmm0
+
+mkdir -p numnets dennets; 
+mkdir -p lattices/num lattices/den;
+
+set HLROPTS = ( -A -D -V -T ${HLRTRACE} -q tvalr -C ${HLRCONFIG} -w -s ${HLRGSCALE} -p ${HLRIMPROB} )
+set HDOPTS  = ( -A -D -V -T ${HDTRACE} -t ${HDGENBEAM} -s ${HDGSCALE} -p ${HDIMPROB} -n ${HDTOKENS} -C ${HDCONFIG} )
+
+foreach i ( `cat lib/flists/spkr.list` )
+
+    echo Processing speaker ${i} with `cat lib/flists/${i}.scp | wc -l | awk '{print $1}'` utterances:;
+    echo "";
+
+    mkdir -p dennets/${i}/bg; 
+    HDecode ${HDOPTS} -i dennets/${i}/bg.${i}.mlf -H ${2}/MODELS -d ${2} -o M -z lat -w lib/lms/bg.${data} -l dennets/${i}/bg -X lat -S lib/flists/${i}.scp ${HDVOCAB} ${HMMLIST} >& dennets/${i}/LOG; 
+    bzip2 -f dennets/${i}/LOG;
+
+    HLRescore ${HLROPTS} -t ${HLRGENBEAM} -m ${HLRMRGDIR} -L dennets/${i}/bg -l dennets/${i} -S lib/flists/${i}.latscp ${HDVOCAB} >& dennets/${i}/hlr.LOG; 
+    bzip2 -f dennets/${i}/hlr.LOG;
+
+end

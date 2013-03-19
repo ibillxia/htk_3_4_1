@@ -1,0 +1,37 @@
+#!/bin/csh -f
+
+# This shell script calls herest repeatedly to build a sequence
+# of model sets, each set in the sequence being 1 single embedded
+# reestimation of the previous
+#
+#     usage: hbuild fromN toN
+#
+# Example - hbuild 2 4  is equivalent to the sequence
+#               herest HTE hmm1 hmm2
+#               herest HTE hmm2 hmm3
+#               herest HTE hmm3 hmm4
+# Note that this script must be executed in the directory holding
+# hmm1, hmm2 etc.
+#
+# Copyright (c) Steve Young & Phil Woodland, 1992, 1993
+# Last Updated 14/5/93
+#
+
+if ( $#argv != 2 ) then
+   echo "usage: hbuild fromN toN"
+   exit 1
+endif
+
+echo "Build started at `date`" > blog
+set i=$1
+while ( $i <= $2 ) 
+   @ j = $i - 1
+   if ( -d hmm$i ) then
+      echo "hbuild: trying to overwrite hmm$i" >> blog
+      exit
+   endif
+   echo "Building hmm$i from hmm$j"  >> blog
+   herest HTE hmm$j hmm$i
+   @ i++
+end
+echo "Build finished at `date`"    >> blog

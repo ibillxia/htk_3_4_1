@@ -1,0 +1,4 @@
+2000-11-12  Gunnar Evermann  <ge204@eng.cam.ac.uk>
+
+	* prompts2mlf: 
+	* prompts2wlist: Cleanup perl code.

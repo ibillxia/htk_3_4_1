@@ -1,0 +1,154 @@
+#!/bin/csh -f
+
+# This script will encode a given list of files of the RM database
+# store the results in a directory tree given the root
+# It has options for coding training data and test data for both
+# the speaker dependent and speaker independent training sets
+#
+# usage: coderm ndxdir cdmount dbtype dbportion targetroot config codelist
+#
+#  ndxdir       - directory to find the NIST filelists
+#  cdmount      - where CD-ROM with both data files is mounted
+#  dbtype       - ind | dep
+#  dbportion    - train | dev_aug | traina | trainb | evalset
+#  targetroot   - root directory for coded files
+#  config       - configuration file used to set coding parameters
+#  codelist     - list of coded files
+#
+#  for speaker dependent - dbportion = traina (1st 6 speakers)
+#                                    = trainb (2nd 6 speakers)
+#  for speaker independent - dbportion = train (main 72 speakers)
+#                          - dbportion = dev_aug (augmented 37 speakers)
+#  In both cases evalset is one of {feb89, oct89, feb91, sep92}
+#
+# eg coderm $RMLIB/ndx $CDRM1 ind train /home/azure/pcw/rmdata
+#
+# The script first identifies the appropriate filelist from ndxdir
+# and then codes all the files listed transforming the filenames 
+# so that they are unique e.g  bef0_3/st0013.wav -> bef0_3_st0013.mfc
+#
+# Copyright (c) Phil Woodland + Julian Odell, 1995
+# Last Updated 17/8/95
+#
+
+if ( $#argv != 7 ) then
+   echo "usage: coderm ndxdir cdmount dbtype dbportion targetroot config codelist"
+   exit 1
+endif
+
+set ndxdir=$1
+if ( ! -d $ndxdir ) then
+   echo "NIST filelist directory $ndxdir not found"
+   exit 2
+endif
+
+set rmcd=$2
+if ( ! -d $rmcd ) then
+   echo "RM CD-ROM $rmcd not found"
+   exit 2
+endif
+
+set dbtype=$3
+if ( $dbtype != ind && $dbtype != dep ) then
+   echo "dbtype of [ind | dep] expected and not $dbtype"
+   exit 2
+endif
+
+set dbportion=$4
+switch ($dbportion)
+case train: 
+   if ($dbtype == ind) then
+      set ndx=$ndxdir/72_indtr.ndx
+   else
+      echo "Illegal dbportion $dbportion for dbtype $dbtype"
+      exit 2
+   endif
+   breaksw 
+case dev_aug:
+   if ($dbtype == ind) then
+      set ndx=$ndxdir/37_indtr.ndx
+   else
+      echo "Illegal dbportion $dbportion for dbtype $dbtype"
+      exit 2
+   endif
+   breaksw 
+case traina: 
+   if ($dbtype == dep) then
+      set ndx=$ndxdir/6a_deptr.ndx
+   else
+      echo "Illegal dbportion $dbportion for dbtype $dbtype"
+      exit 2
+   endif
+   breaksw 
+case trainb: 
+   if ($dbtype == dep) then
+      set ndx=$ndxdir/6b_deptr.ndx
+   else
+      echo "Illegal dbportion $dbportion for dbtype $dbtype"
+      exit 2
+   endif
+   breaksw 
+case feb89:
+   set ndx=$ndxdir/4_${dbtype}tst.ndx
+   breaksw
+case oct89:
+   set ndx=$ndxdir/5_${dbtype}tst.ndx
+   breaksw
+case feb91:
+   set ndx=$ndxdir/6_${dbtype}tst.ndx
+   breaksw
+case sep92:
+   set ndx=$ndxdir/7_${dbtype}tst.ndx
+   breaksw
+case dms0_tst:
+   set ndx=$ndxdir/dms0_tst.ndx
+   breaksw
+default: 
+   echo "dbtype not one of (train | dev_aug | traina | trainb | feb89 | oct89 | feb91 | sep92 | dms0_tst)"
+   exit 2
+endsw
+
+set tgtroot=$5
+if ( ! -d $tgtroot ) then
+   echo "Target root directory $tgtroot doesnt exist"
+   exit 2
+endif
+
+set config=$6
+set codefilelist=$7
+
+if ( ! -r $ndx ) then
+    echo "Cant read RM filelist $ndx"
+    exit 2
+endif
+
+set codescript="${codefilelist}.code"
+
+\rm -f $codefilelist
+\rm -f $codescript
+
+echo "Making file lists"
+grep -v "^;" $ndx | sed -e "s:^/\(.*\)/\(.*\)\([/_]\)\(.*\)/\(.*\)/\(.*\)\.wav:${rmcd}/\1/\2\3\4/\5/\6.wav ${tgtroot}/\2_\4/\5/\5_\6.mfc:" > $codescript
+awk '{ print $2}' $codescript > $codefilelist
+set count=`cat $codefilelist | wc -l`
+
+echo "Making directories"
+foreach i (`sed 's:\(.*\)/[a-z0-9_]*\.mfc:\1:' $codefilelist | sort -u`)
+   if ( ! -d $i ) then
+      mkdir -p $i
+      if ( $status != 0 ) then
+         echo "Cannot Create Directory $i"
+         exit 1
+      endif
+   endif
+end
+
+echo "Coding data"
+HCopy -A -T 1 -C $config -S $codescript
+if ( $status != 0 ) then
+   echo "Bad Status after Coding"
+   exit 1
+endif
+\rm -f $codescript
+echo ""
+echo "Coding complete - $count files processed"

@@ -1,0 +1,37 @@
+<BEGINtest_config_file>
+
+<COMMENT>
+   This DCF produces a plain single mixture, three stream, full
+   covariance monophone system
+
+<BEGINsys_setup>
+
+hsKind: P
+covKind: F
+nStreams: 3
+nMixes: 1 1 1
+Context: M
+TiedState: n
+VQ_clust: L
+HERest_Iter: 3
+HERest_par_mode: n
+Clean_up: y
+Trace_tool_calls: y
+
+<ENDsys_setup>:
+
+<BEGINtool_steps>
+
+HCopy: n
+HList: n
+HQuant: n
+HLEd: n
+HInit: y
+HRest: y
+HERest: y
+HSmooth: n
+HVite: y
+
+<ENDtool_steps>:
+
+<ENDtest_config_file>:

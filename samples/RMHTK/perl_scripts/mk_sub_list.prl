@@ -1,0 +1,37 @@
+#!/usr/local/bin/perl
+
+# This script will generate the list of subset data from the full list
+#	to be used in discrete model.
+#   
+# usage: mk_sub_list.prl modulus remain full_list_file_name sub_list_file_name
+#
+# where: the line to be selected as
+#			if ( line_number % modulus == remain ) print that line
+#		
+#
+# TL 7/1998
+#
+
+if ( $#ARGV != 3 ) {
+   die "usage: mk_sub_list.prl modulus remain full_list_file_name sub_list_file_name\n";
+}
+
+$modulus = $ARGV[0];
+$remain = $ARGV[1];
+
+$full_file=$ARGV[2];
+if (! -f $full_file) {
+   die "data list file $full_file not found\n";
+}
+
+$sub_file=$ARGV[3];
+
+open(FULLFILE,"<$full_file") or die "Can't open data list file $full_file\n";
+open(SUBFILE,">$sub_file") or die "Can't open subset data file $sub_file\n";
+while (<FULLFILE>) {
+	if ( ($. % $modulus ) == $remain ) {
+		printf SUBFILE "$_";
+	}
+}
+close(FULLFILE);   
+close(SUBFILE);   

@@ -1,0 +1,59 @@
+#!/usr/local/bin/perl
+
+#  fix rm files that were corrupted in recording
+#  chops out a number of samples from the (coded) files
+#   
+#  usage: fixrm.prl corruptlist dataroot
+#
+#  where:       -corruptlist is a file with each list containing the
+#                       corrupt_file_name corrupt_start corrupt_end
+#               -dataroot is the root directory for the files in corruptlist
+#
+# the script moves the original file to the same name with 
+# .orig added to the name
+#
+# Copyright (c) Phil Woodland, 1993
+# Last Updated 14/5/93
+#
+# convert to perl by TL 7/1998
+#
+
+if ( $#ARGV != 1 ) {
+   die "usage: fixrm.prl corruptlist dataroot\n";
+}
+
+$Corrupt=$ARGV[0];
+if (! -f $Corrupt) {
+   die "fixrm: corrupt list $Corrupt not found\n";
+}
+
+$Data_root=$ARGV[1];
+if (! -d $Data_root) {
+   die "fixrm: Invalid dataroot directory $Data_root\n";
+}
+
+open(CORRUPTFILE,"<$Corrupt") or die "Can't open corrupt list file $Corrupt\n";
+while (<CORRUPTFILE>) {
+	/^\s+$/ && next;        # skip an empty line
+	s/\s+/ /g;              # turn one or more white spaces into a space
+	($name, $first, $last) = split(" ",$_);
+	$fullname = "$Data_root\\$name";
+	$backup = "$fullname".".orig";
+	if ( -f $backup ) {
+		print "$fullname already processed\n";
+	}
+	else {
+		print "Deleting frames $first to $last of $fullname\n";
+		system("copy $fullname $backup");
+		$tmpfile1 = "$fullname".".tp1";
+		$tmpfile2 = "$fullname".".tp2";
+		$startend = ( $first - 1 ) * 100000;
+		system("HCopy -A -e $startend $fullname $tmpfile1");
+		$endstart = ( $last + 1 ) * 100000;
+		system("HCopy -A -s $endstart $fullname $tmpfile2");
+		system("HCopy -A $tmpfile1 + $tmpfile2 $fullname");
+		unlink $tmpfile1;
+		unlink $tmpfile2;
+	}
+}
+close(CORRUPTFILE);   
