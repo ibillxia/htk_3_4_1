@@ -74,6 +74,6 @@ install: mkinstalldir $(PROGS)
 	for program in $(PROGS) ; do $(INSTALL) -m 755 $${program}@BINARY_EXTENSION@ $(bindir) ; done
 
 mkinstalldir:
-        if [ ! -d $(bindir) -a X_@TRADHTK@ = X_yes ] ; then mkdir -p $(bindir) ; fi
+	if [ ! -d $(bindir) -a X_@TRADHTK@ = X_yes ] ; then mkdir -p $(bindir) ; fi
 
 .PHONY: all strip clean cleanup distclean install mkinstalldir
